@@ -9,7 +9,7 @@ module-level constants means:
 
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +18,13 @@ class Settings(BaseSettings):
 
     # --- Capture ---
     poll_interval_seconds: float = Field(default=3.0, gt=0)
-    excluded_apps: frozenset[str] = frozenset({"LockApp.exe"})
+
+    # Stored as a raw comma-separated string. pydantic-settings tries to
+    # JSON-decode complex types (set/list) sourced from env vars, which
+    # breaks on a plain "a.exe,b.exe" string rather than a JSON array.
+    # Keeping the env-facing field a str and exposing the parsed set via
+    # a computed_field sidesteps that entirely.
+    excluded_apps_raw: str = Field(default="LockApp.exe")
 
     # --- Reasoning / rate limiting ---
     min_seconds_between_llm_calls: float = Field(default=60.0, gt=0)
@@ -35,12 +41,10 @@ class Settings(BaseSettings):
     # --- Anthropic credentials ---
     anthropic_api_key: str | None = None
 
-    @field_validator("excluded_apps", mode="before")
-    @classmethod
-    def _parse_excluded_apps(cls, v: object) -> object:
-        if isinstance(v, str):
-            return frozenset(x.strip() for x in v.split(",") if x.strip())
-        return v
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def excluded_apps(self) -> frozenset[str]:
+        return frozenset(x.strip() for x in self.excluded_apps_raw.split(",") if x.strip())
 
 
 def get_settings() -> Settings:
