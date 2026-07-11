@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from cogn_os.capture.types import WindowInfo
 from cogn_os.storage.database import session_scope
-from cogn_os.storage.models import EventRecord
-from cogn_os.storage.repository import EventRepository
+from cogn_os.storage.models import EventRecord, SuggestionRecord
+from cogn_os.storage.repository import EventRepository, SuggestionRecordDTO, SuggestionRepository
 
 
 class SqlAlchemyEventRepository(EventRepository):
@@ -34,7 +34,7 @@ class SqlAlchemyEventRepository(EventRepository):
         with session_scope(self._session_factory) as session:
             stmt = select(EventRecord).order_by(EventRecord.id.desc()).limit(limit)
             records = list(session.scalars(stmt))
-            records.reverse()  # chronological order for the caller
+            records.reverse()
             return [
                 WindowInfo(app_name=r.app_name, window_title=r.window_title, captured_at=r.ts)
                 for r in records
@@ -44,3 +44,38 @@ class SqlAlchemyEventRepository(EventRepository):
         with session_scope(self._session_factory) as session:
             stmt = select(EventRecord)
             return len(list(session.scalars(stmt)))
+
+
+class SqlAlchemySuggestionRepository(SuggestionRepository):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add(self, info: WindowInfo, suggestion: str) -> SuggestionRecordDTO:
+        with session_scope(self._session_factory) as session:
+            record = SuggestionRecord(
+                ts=info.captured_at,
+                app_name=info.app_name,
+                window_title=info.window_title,
+                suggestion=suggestion,
+            )
+            session.add(record)
+            session.flush()
+            return SuggestionRecordDTO(
+                id=record.id,
+                ts=record.ts,
+                app_name=record.app_name,
+                window_title=record.window_title,
+                suggestion=record.suggestion,
+            )
+
+    def recent(self, limit: int = 20) -> list[SuggestionRecordDTO]:
+        with session_scope(self._session_factory) as session:
+            stmt = select(SuggestionRecord).order_by(SuggestionRecord.id.desc()).limit(limit)
+            records = list(session.scalars(stmt))
+            return [
+                SuggestionRecordDTO(
+                    id=r.id, ts=r.ts, app_name=r.app_name,
+                    window_title=r.window_title, suggestion=r.suggestion,
+                )
+                for r in records
+            ]
