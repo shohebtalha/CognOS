@@ -36,6 +36,12 @@ def capture() -> None:
         loop.stop()
         typer.echo("\nStopped.")
 
+@app.command()
+def version() -> None:
+    """Print the installed CognOS version."""
+    from cogn_os import __version__
+    typer.echo(f"CognOS v{__version__}")
+
 
 if __name__ == "__main__":
     app()
