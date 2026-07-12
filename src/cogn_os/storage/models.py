@@ -42,3 +42,17 @@ class SuggestionRecord(Base):
 
     def __repr__(self) -> str:
         return f"SuggestionRecord(id={self.id}, suggestion={self.suggestion!r})"
+    
+class ScreenshotRecord(Base):
+    __tablename__ = "screenshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    event_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
+    image_b64: Mapped[str] = mapped_column(Text, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    format: Mapped[str] = mapped_column(String(16), nullable=False, default="jpeg")
+
+    def __repr__(self) -> str:
+        return f"ScreenshotRecord(id={self.id}, ts={self.ts}, {self.width}x{self.height})"
