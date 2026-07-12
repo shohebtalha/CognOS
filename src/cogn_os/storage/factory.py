@@ -1,6 +1,6 @@
 """
 One place that assembles the storage layer from Settings — engine,
-session factory, table creation, and both repositories. The rest of the
+session factory, table creation, and all repositories. The rest of the
 app (capture loop, API, CLI) calls get_repositories() once at startup
 instead of each constructing engines/sessions itself.
 """
@@ -12,9 +12,10 @@ from dataclasses import dataclass
 from cogn_os.config import Settings
 from cogn_os.storage.database import make_engine, make_session_factory
 from cogn_os.storage.models import Base
-from cogn_os.storage.repository import EventRepository, SuggestionRepository
+from cogn_os.storage.repository import EventRepository, ScreenshotRepository, SuggestionRepository
 from cogn_os.storage.sqlalchemy_repository import (
     SqlAlchemyEventRepository,
+    SqlAlchemyScreenshotRepository,
     SqlAlchemySuggestionRepository,
 )
 
@@ -23,6 +24,7 @@ from cogn_os.storage.sqlalchemy_repository import (
 class Repositories:
     events: EventRepository
     suggestions: SuggestionRepository
+    screenshots: ScreenshotRepository
 
 
 def get_repositories(settings: Settings, create_tables: bool = True) -> Repositories:
@@ -33,4 +35,5 @@ def get_repositories(settings: Settings, create_tables: bool = True) -> Reposito
     return Repositories(
         events=SqlAlchemyEventRepository(session_factory),
         suggestions=SqlAlchemySuggestionRepository(session_factory),
+        screenshots=SqlAlchemyScreenshotRepository(session_factory),
     )
