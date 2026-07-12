@@ -16,6 +16,10 @@ from cogn_os.storage.database import session_scope
 from cogn_os.storage.models import EventRecord, SuggestionRecord
 from cogn_os.storage.repository import EventRepository, SuggestionRecordDTO, SuggestionRepository
 
+from cogn_os.screenshot.types import Screenshot
+from cogn_os.storage.models import ScreenshotRecord
+from cogn_os.storage.repository import ScreenshotRepository
+
 
 class SqlAlchemyEventRepository(EventRepository):
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
@@ -79,3 +83,27 @@ class SqlAlchemySuggestionRepository(SuggestionRepository):
                 )
                 for r in records
             ]
+
+
+class SqlAlchemyScreenshotRepository(ScreenshotRepository):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add(self, screenshot: Screenshot, event_id: int | None = None) -> int:
+        with session_scope(self._session_factory) as session:
+            record = ScreenshotRecord(
+                ts=screenshot.captured_at,
+                event_id=event_id,
+                image_b64=screenshot.image_b64,
+                width=screenshot.width,
+                height=screenshot.height,
+                format=screenshot.format,
+            )
+            session.add(record)
+            session.flush()
+            return record.id
+
+    def count(self) -> int:
+        with session_scope(self._session_factory) as session:
+            stmt = select(ScreenshotRecord)
+            return len(list(session.scalars(stmt)))

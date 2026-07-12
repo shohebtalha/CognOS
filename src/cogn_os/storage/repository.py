@@ -15,6 +15,8 @@ from datetime import datetime
 
 from cogn_os.capture.types import WindowInfo
 
+from cogn_os.screenshot.types import Screenshot
+
 
 @dataclass(frozen=True, slots=True)
 class SuggestionRecordDTO:
@@ -52,4 +54,14 @@ class SuggestionRepository(ABC):
     @abstractmethod
     def recent(self, limit: int = 20) -> list[SuggestionRecordDTO]:
         """Return the most recent suggestions, newest first."""
+        raise NotImplementedError
+    
+class ScreenshotRepository(ABC):
+    @abstractmethod
+    def add(self, screenshot: "Screenshot", event_id: int | None = None) -> int:
+        """Persist a screenshot, return its assigned id."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def count(self) -> int:
         raise NotImplementedError
