@@ -1,16 +1,7 @@
-"""
-The feature schema for the suggestion-worthiness classifier. Defining
-this as a typed dataclass (rather than a raw dict/DataFrame row) means
-training code and live-inference code share one source of truth for
-"what a feature vector is" — a mismatch between training columns and
-inference columns is one of the most common real-world ML bugs, and
-this structure makes that class of bug a type error instead of a
-silent accuracy regression.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from typing import ClassVar
 
 from cogn_os.ml.app_category import AppCategory
 
@@ -31,7 +22,7 @@ class SuggestionFeatures:
     # --- recent activity pattern ---
     switches_last_5min: int    # rolling count of window changes in the last 5 minutes
 
-    FEATURE_NAMES: tuple[str, ...] = (
+    FEATURE_NAMES: ClassVar[tuple[str, ...]] = (
         "seconds_since_last_llm_call",
         "hour_of_day",
         "is_weekend",
@@ -43,4 +34,4 @@ class SuggestionFeatures:
     )
 
     def to_dict(self) -> dict[str, object]:
-        return {f.name: getattr(self, f.name) for f in fields(self) if f.name != "FEATURE_NAMES"}
+        return {f.name: getattr(self, f.name) for f in fields(self)}
