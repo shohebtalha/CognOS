@@ -71,3 +71,12 @@ def test_threshold_is_configurable(gate):
 
     assert lenient_gate.should_flag(features) is True
     assert strict_gate.should_flag(features) is False
+
+def test_should_flag_handles_infinite_seconds_since_last_call(gate):
+    # Regression test: the very first event of a session has
+    # seconds_since_last_llm_call = inf (see FeatureExtractor). This
+    # previously crashed StandardScaler because live inference wasn't
+    # applying the same inf-capping used during training.
+    features = make_features(seconds_since_last_llm_call=float("inf"))
+    result = gate.should_flag(features)
+    assert isinstance(result, bool)

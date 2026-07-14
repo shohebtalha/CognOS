@@ -1,13 +1,3 @@
-"""
-Real SuggestionGate backed by the trained scikit-learn pipeline from
-Day 6. Loads the .joblib file once at construction (not per-call —
-joblib.load is relatively expensive and the model is immutable during
-a run). Converts a single SuggestionFeatures into the one-row DataFrame
-shape the pipeline expects, using the exact column order/names defined
-in SuggestionFeatures.FEATURE_NAMES — the same shared contract used at
-training time, which is precisely what prevents train/serve skew here.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -16,6 +6,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from cogn_os.ml.dataset import cap_infinite_feature
 from cogn_os.ml.features import SuggestionFeatures
 from cogn_os.ml.suggestion_gate import SuggestionGate
 
@@ -35,16 +26,33 @@ class ModelSuggestionGate(SuggestionGate):
 
     def should_flag(self, features: SuggestionFeatures) -> bool:
         row = {name: getattr(features, name) for name in SuggestionFeatures.FEATURE_NAMES}
-        # app_category is an enum on the dataclass but the pipeline was
-        # trained on its string .value (see dataset.py/train.py) — this
-        # conversion must exactly mirror what generate_training_data.py did.
         row["app_category"] = row["app_category"].value if hasattr(row["app_category"], "value") else row["app_category"]
 
         x = pd.DataFrame([row])
+        # Must mirror prepare_data()'s preprocessing exactly — the model
+        # was trained on capped values, so live inference has to cap the
+        # same way or infinity (e.g. the very first event of a session,
+        # where seconds_since_last_llm_call is genuinely infinite) breaks
+        # StandardScaler at predict time. This is exactly the train/serve
+        # skew the shared SuggestionFeatures schema was meant to prevent
+        # — the schema covered *names*, but not this one preprocessing step.
+        x = cap_infinite_feature(x, "seconds_since_last_llm_call")
 
         try:
-            probability = self._pipeline.predict_proba(x)[0][1]  # P(class=1)
+            probability = self._pipeline.predict_proba(x)[0][1]
             return bool(probability >= self._threshold)
         except Exception:
             logger.exception("SuggestionGate inference failed; defaulting to False")
             return False
+        
+    def predict_probability(self, features: SuggestionFeatures) -> float:
+        """Same preprocessing as should_flag, but returns the raw
+        probability instead of the thresholded decision. Useful for
+        diagnostics/debugging — never used in the live capture path."""
+        row = {name: getattr(features, name) for name in SuggestionFeatures.FEATURE_NAMES}
+        row["app_category"] = row["app_category"].value if hasattr(row["app_category"], "value") else row["app_category"]
+
+        x = pd.DataFrame([row])
+        x = cap_infinite_feature(x, "seconds_since_last_llm_call")
+
+        return float(self._pipeline.predict_proba(x)[0][1])
