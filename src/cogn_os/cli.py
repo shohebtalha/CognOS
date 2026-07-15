@@ -20,6 +20,8 @@ from cogn_os.service.clock import RealClock
 from cogn_os.service.wiring import build_ml_gated_loop
 from cogn_os.storage.factory import get_repositories
 
+import json
+
 app = typer.Typer()
 
 MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "suggestion_classifier.joblib"
@@ -87,3 +89,49 @@ def feedback(count: int = 10) -> None:
         # 's' or anything else: skip, leave unlabeled
 
     typer.echo("\nDone. Run 'cognos train' once you have enough labeled examples.")
+
+
+@app.command()
+def train() -> None:
+    """Retrain the suggestion classifier using real labeled feedback
+    (from 'cognos feedback') blended with the synthetic bootstrap
+    dataset. Only promotes (overwrites) the production model if the
+    new one's test F1 is >= the current production F1 — prints a clear
+    before/after comparison either way."""
+    import joblib
+
+    from cogn_os.ml.retrain import retrain
+
+    settings = get_settings()
+    repos = get_repositories(settings)
+
+    real_examples = repos.feature_logs.labeled_examples()
+    typer.echo(f"Found {len(real_examples)} real labeled examples.")
+
+    project_root = Path(__file__).parent.parent.parent
+    synthetic_csv = project_root / "data" / "synthetic_events.csv"
+    metrics_path = project_root / "models" / "metrics.json"
+    model_path = project_root / "models" / "suggestion_classifier.joblib"
+
+    summary, results, pipeline = retrain(synthetic_csv, real_examples, metrics_path)
+
+    typer.echo(f"\nWinner: {summary.winner}")
+    typer.echo(f"New F1: {summary.new_f1}")
+    typer.echo(f"Previous F1: {summary.previous_f1}")
+
+    if summary.promoted:
+        typer.secho(f"PROMOTED — new model is >= previous. Saving.", fg=typer.colors.GREEN)
+        joblib.dump(pipeline, model_path)
+        metrics_report = {
+            "winner": summary.winner,
+            "feature_names": list(__import__("cogn_os.ml.features", fromlist=["SuggestionFeatures"]).SuggestionFeatures.FEATURE_NAMES),
+            "real_examples_used": summary.real_examples_used,
+            "results": results,
+        }
+        metrics_path.write_text(json.dumps(metrics_report, indent=2))
+    else:
+        typer.secho(
+            f"NOT promoted — new F1 ({summary.new_f1}) is below previous "
+            f"({summary.previous_f1}). Production model unchanged.",
+            fg=typer.colors.RED,
+        )
