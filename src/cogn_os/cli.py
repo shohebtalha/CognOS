@@ -37,7 +37,7 @@ def capture() -> None:
     def on_flagged(info) -> None:
         typer.secho(f"[FLAGGED] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
 
-    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged)
+    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged, feature_log_repo=repos.feature_logs,)
 
     typer.echo(f"CognOS capture running (ML-gated). Logging to {settings.database_url}")
     try:
@@ -56,3 +56,34 @@ def version() -> None:
 
 if __name__ == "__main__":
     app()
+
+@app.command()
+def feedback(count: int = 10) -> None:
+    """Review recent unlabeled model decisions and label them y/n.
+    This is what builds the real (non-synthetic) training set used by
+    'cognos train' — Day 6's model trained purely on synthetic data;
+    this is how it gets grounded in your actual judgment."""
+    settings = get_settings()
+    repos = get_repositories(settings)
+
+    unlabeled = repos.feature_logs.recent_unlabeled(limit=count)
+    if not unlabeled:
+        typer.echo("No unlabeled entries. Run 'cognos capture' for a while first.")
+        return
+
+    typer.echo(f"Labeling {len(unlabeled)} entries. y = worth flagging, n = not, s = skip, q = quit.\n")
+    for entry in unlabeled:
+        typer.echo(f"[{entry.ts}] {entry.app_name} — {entry.window_title}")
+        typer.echo(f"    model predicted: {entry.predicted_probability:.2f} "
+                    f"({'FLAGGED' if entry.model_flagged else 'skipped'})")
+        answer = typer.prompt("    was this worth flagging? [y/n/s/q]", default="s")
+
+        if answer.lower() == "q":
+            break
+        if answer.lower() == "y":
+            repos.feature_logs.set_label(entry.id, 1)
+        elif answer.lower() == "n":
+            repos.feature_logs.set_label(entry.id, 0)
+        # 's' or anything else: skip, leave unlabeled
+
+    typer.echo("\nDone. Run 'cognos train' once you have enough labeled examples.")
