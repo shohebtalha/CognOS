@@ -21,6 +21,8 @@ from cogn_os.ml.suggestion_gate import SuggestionGate
 from cogn_os.service.capture_loop import CaptureLoop
 from cogn_os.service.clock import Clock
 from cogn_os.storage.repository import EventRepository
+from cogn_os.storage.repository import EventRepository, FeatureLogRepository
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +56,16 @@ def build_ml_gated_loop(
     event_repo: EventRepository,
     suggestion_gate: SuggestionGate,
     on_flagged: OnFlagged,
+    feature_log_repo: FeatureLogRepository | None = None,
     context_tracker: ContextTracker | None = None,
     feature_extractor: FeatureExtractor | None = None,
 ) -> CaptureLoop:
-    """Every window change: always logged to storage; additionally run
-    through FeatureExtractor -> SuggestionGate, and on_flagged() fires
-    only if the gate says yes."""
+    """Every window change: always logged to storage; run through
+    FeatureExtractor -> SuggestionGate; on_flagged() fires if flagged;
+    AND, if feature_log_repo is provided, every feature vector + the
+    model's decision is logged for future retraining (Day 8) —
+    feature_log_repo is optional so Day 7's tests/wiring keep working
+    unchanged if a caller doesn't pass one."""
     tracker = context_tracker or ContextTracker()
     extractor = feature_extractor or FeatureExtractor()
 
@@ -82,14 +88,17 @@ def build_ml_gated_loop(
             logger.exception("suggestion gate failed; treating as not-flagged")
             flagged = False
 
+        if feature_log_repo is not None:
+            probability = getattr(suggestion_gate, "predict_probability", lambda f: float(flagged))(features)
+            fdict = features.to_dict()
+            fdict["app_category"] = fdict["app_category"].value
+            feature_log_repo.add(info, fdict, probability=probability, flagged=flagged)
+
         if flagged:
             tracker.record_llm_call(info.captured_at)
             on_flagged(info)
 
     return CaptureLoop(
-        source=source,
-        clock=clock,
-        poll_interval_seconds=settings.poll_interval_seconds,
-        excluded_apps=settings.excluded_apps,
-        on_window_changed=on_window_changed,
+        source=source, clock=clock, poll_interval_seconds=settings.poll_interval_seconds,
+        excluded_apps=settings.excluded_apps, on_window_changed=on_window_changed,
     )
