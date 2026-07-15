@@ -5,6 +5,7 @@ from cogn_os.ml.fake_suggestion_gate import FakeSuggestionGate
 from cogn_os.service.clock import FakeClock
 from cogn_os.service.wiring import build_ml_gated_loop
 from cogn_os.storage.sqlalchemy_repository import SqlAlchemyEventRepository
+from cogn_os.storage.sqlalchemy_repository import SqlAlchemyFeatureLogRepository
 
 
 def test_every_change_logged_regardless_of_gate_decision(sqlite_session_factory):
@@ -94,3 +95,39 @@ def test_excluded_apps_never_reach_the_gate(sqlite_session_factory):
 
     assert gate.received_features == []  # never even called
     assert event_repo.count() == 0
+
+
+
+def test_feature_log_repo_records_every_event_when_provided(sqlite_session_factory):
+    event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
+    feature_log_repo = SqlAlchemyFeatureLogRepository(sqlite_session_factory)
+    settings = Settings(_env_file=None)
+    gate = FakeSuggestionGate(sequence=[True, False])
+
+    w1 = WindowInfo.now("code.exe", "main.py")
+    w2 = WindowInfo.now("chrome.exe", "docs")
+    loop = build_ml_gated_loop(
+        settings, FakeWindowInfoSource([w1, w2]), FakeClock(), event_repo,
+        gate, on_flagged=lambda info: None, feature_log_repo=feature_log_repo,
+    )
+    loop.run(max_ticks=2)
+
+    labeled_and_unlabeled = feature_log_repo.recent_unlabeled(limit=10)
+    assert len(labeled_and_unlabeled) == 2
+
+
+def test_feature_log_repo_is_optional(sqlite_session_factory):
+    # Passing None (or omitting it) must not break the loop — Day 7
+    # callers/tests that don't care about logging still work unchanged.
+    event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
+    settings = Settings(_env_file=None)
+    gate = FakeSuggestionGate(sequence=True)
+
+    w1 = WindowInfo.now("code.exe", "main.py")
+    loop = build_ml_gated_loop(
+        settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
+        gate, on_flagged=lambda info: None,  # no feature_log_repo passed
+    )
+    loop.run(max_ticks=1)  # should not raise
+
+    assert event_repo.count() == 1
