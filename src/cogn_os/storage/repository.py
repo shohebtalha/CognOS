@@ -65,3 +65,41 @@ class ScreenshotRepository(ABC):
     @abstractmethod
     def count(self) -> int:
         raise NotImplementedError
+    
+@dataclass(frozen=True, slots=True)
+class FeatureLogDTO:
+    id: int
+    ts: datetime
+    app_name: str
+    window_title: str
+    features: dict  # the 8 SuggestionFeatures fields, flat
+    predicted_probability: float
+    model_flagged: bool
+    user_label: int | None
+
+
+class FeatureLogRepository(ABC):
+    @abstractmethod
+    def add(
+        self, info: WindowInfo, features: dict, probability: float, flagged: bool
+    ) -> int:
+        """Persist one feature-vector log entry, return its id."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_label(self, log_id: int, label: int) -> bool:
+        """Attach a user feedback label (0 or 1) to a logged entry.
+        Returns False if log_id doesn't exist."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def recent_unlabeled(self, limit: int = 10) -> list[FeatureLogDTO]:
+        """Most recent entries still awaiting a feedback label —
+        what 'cognos feedback' shows the user to label."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def labeled_examples(self) -> list[FeatureLogDTO]:
+        """All entries that have a user_label — this is the real
+        training set Day 8's retraining reads from."""
+        raise NotImplementedError

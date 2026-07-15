@@ -20,6 +20,9 @@ from cogn_os.screenshot.types import Screenshot
 from cogn_os.storage.models import ScreenshotRecord
 from cogn_os.storage.repository import ScreenshotRepository
 
+from cogn_os.storage.models import FeatureLogRecord
+from cogn_os.storage.repository import FeatureLogDTO, FeatureLogRepository
+
 
 class SqlAlchemyEventRepository(EventRepository):
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
@@ -107,3 +110,57 @@ class SqlAlchemyScreenshotRepository(ScreenshotRepository):
         with session_scope(self._session_factory) as session:
             stmt = select(ScreenshotRecord)
             return len(list(session.scalars(stmt)))
+        
+class SqlAlchemyFeatureLogRepository(FeatureLogRepository):
+    _FEATURE_FIELDS = (
+        "seconds_since_last_llm_call", "hour_of_day", "is_weekend", "app_category",
+        "title_length", "app_changed", "is_first_time_app_today", "switches_last_5min",
+    )
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add(self, info: WindowInfo, features: dict, probability: float, flagged: bool) -> int:
+        with session_scope(self._session_factory) as session:
+            record = FeatureLogRecord(
+                ts=info.captured_at,
+                app_name=info.app_name,
+                window_title=info.window_title,
+                predicted_probability=probability,
+                model_flagged=flagged,
+                **{k: features[k] for k in self._FEATURE_FIELDS},
+            )
+            session.add(record)
+            session.flush()
+            return record.id
+
+    def set_label(self, log_id: int, label: int) -> bool:
+        with session_scope(self._session_factory) as session:
+            record = session.get(FeatureLogRecord, log_id)
+            if record is None:
+                return False
+            record.user_label = label
+            return True
+
+    def recent_unlabeled(self, limit: int = 10) -> list[FeatureLogDTO]:
+        with session_scope(self._session_factory) as session:
+            stmt = (
+                select(FeatureLogRecord)
+                .where(FeatureLogRecord.user_label.is_(None))
+                .order_by(FeatureLogRecord.id.desc())
+                .limit(limit)
+            )
+            return [self._to_dto(r) for r in session.scalars(stmt)]
+
+    def labeled_examples(self) -> list[FeatureLogDTO]:
+        with session_scope(self._session_factory) as session:
+            stmt = select(FeatureLogRecord).where(FeatureLogRecord.user_label.is_not(None))
+            return [self._to_dto(r) for r in session.scalars(stmt)]
+
+    def _to_dto(self, r: FeatureLogRecord) -> FeatureLogDTO:
+        return FeatureLogDTO(
+            id=r.id, ts=r.ts, app_name=r.app_name, window_title=r.window_title,
+            features={k: getattr(r, k) for k in self._FEATURE_FIELDS},
+            predicted_probability=r.predicted_probability,
+            model_flagged=r.model_flagged, user_label=r.user_label,
+        )
