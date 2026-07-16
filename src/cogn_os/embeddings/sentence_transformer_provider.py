@@ -38,7 +38,7 @@ class SentenceTransformerProvider(EmbeddingProvider):
 
         logger.info("loading local embedding model: %s (first run downloads it)", model_name)
         self._model = SentenceTransformer(model_name)
-        self._dimension = self._model.get_sentence_embedding_dimension()
+        self._dimension = self._model.get_embedding_dimension()
 
     def embed(self, text: str) -> np.ndarray:
         # encode() on a single string still returns a batch internally;
