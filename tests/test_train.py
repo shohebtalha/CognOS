@@ -6,7 +6,6 @@ from cogn_os.ml.train import build_pipeline, prepare_data, train_model
 
 @pytest.fixture
 def toy_dataframe():
-    # Small but class-balanced enough for stratified split to work with test_size=0.3.
     rows = []
     for i in range(20):
         rows.append({
@@ -18,6 +17,7 @@ def toy_dataframe():
             "app_changed": bool(i % 2),
             "is_first_time_app_today": bool(i % 4 == 0),
             "switches_last_5min": i % 5,
+            "title_semantic_similarity_to_previous": 0.5 + (i % 5) * 0.1,
             "worth_flagging": i % 2,
         })
     return pd.DataFrame(rows)

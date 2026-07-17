@@ -44,5 +44,7 @@ def test_every_row_has_all_expected_columns():
         "seconds_since_last_llm_call", "hour_of_day", "is_weekend",
         "app_category", "title_length", "app_changed",
         "is_first_time_app_today", "switches_last_5min", "worth_flagging",
+        "title_semantic_similarity_to_previous",
+
     }
     assert set(rows[0].keys()) == expected_cols

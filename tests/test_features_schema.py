@@ -12,6 +12,8 @@ def make_features(**overrides) -> SuggestionFeatures:
         app_changed=True,
         is_first_time_app_today=False,
         switches_last_5min=3,
+        title_semantic_similarity_to_previous=0.5,
+
     )
     defaults.update(overrides)
     return SuggestionFeatures(**defaults)

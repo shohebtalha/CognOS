@@ -8,6 +8,8 @@ def make_features() -> SuggestionFeatures:
         seconds_since_last_llm_call=10.0, hour_of_day=9, is_weekend=False,
         app_category=AppCategory.IDE, title_length=5, app_changed=True,
         is_first_time_app_today=False, switches_last_5min=0,
+        title_semantic_similarity_to_previous=0.5,
+
     )
 
 
