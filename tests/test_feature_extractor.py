@@ -4,6 +4,9 @@ from cogn_os.capture.types import WindowInfo
 from cogn_os.ml.app_category import AppCategory
 from cogn_os.ml.feature_extractor import FeatureExtractor
 
+from cogn_os.embeddings.change_detector import SemanticChangeDetector
+from cogn_os.embeddings.fake_provider import FakeEmbeddingProvider
+
 
 def w(app_name: str, title: str, minutes_ago: float, base: datetime) -> WindowInfo:
     return WindowInfo(
@@ -119,3 +122,37 @@ def test_extract_weekend_flag():
     features = extractor.extract(current, None, [], None, set())
 
     assert features.is_weekend is True
+
+
+
+def test_extract_without_change_detector_uses_neutral_default():
+    base = datetime(2026, 7, 13, 14, 0, tzinfo=timezone.utc)
+    current = w("code.exe", "main.py", 0, base)
+
+    extractor = FeatureExtractor()  # no change_detector passed
+    features = extractor.extract(current, None, [], None, set())
+
+    assert features.title_semantic_similarity_to_previous == 0.5
+
+
+def test_extract_with_change_detector_computes_real_similarity():
+    base = datetime(2026, 7, 13, 14, 0, tzinfo=timezone.utc)
+    previous = w("code.exe", "main.py", 1, base)
+    current = w("code.exe", "main.py", 0, base)  # identical title
+
+    detector = SemanticChangeDetector(FakeEmbeddingProvider())
+    extractor = FeatureExtractor(change_detector=detector)
+    features = extractor.extract(current, previous, [], None, set())
+
+    assert features.title_semantic_similarity_to_previous == 1.0  # identical strings short-circuit to 1.0
+
+
+def test_extract_first_event_similarity_is_zero_no_previous_title():
+    base = datetime(2026, 7, 13, 14, 0, tzinfo=timezone.utc)
+    current = w("code.exe", "main.py", 0, base)
+
+    detector = SemanticChangeDetector(FakeEmbeddingProvider())
+    extractor = FeatureExtractor(change_detector=detector)
+    features = extractor.extract(current, None, [], None, set())
+
+    assert features.title_semantic_similarity_to_previous == 0.0  # ChangeDecision default for no-previous case
