@@ -22,6 +22,9 @@ class SuggestionFeatures:
     # --- recent activity pattern ---
     switches_last_5min: int    # rolling count of window changes in the last 5 minutes
 
+    # --- semantic signal ---
+    title_semantic_similarity_to_previous: float  # 1.0 = same context, 0.0 = orthogonal, -1.0 = opposite
+
     FEATURE_NAMES: ClassVar[tuple[str, ...]] = (
         "seconds_since_last_llm_call",
         "hour_of_day",
@@ -31,6 +34,8 @@ class SuggestionFeatures:
         "app_changed",
         "is_first_time_app_today",
         "switches_last_5min",
+        "title_semantic_similarity_to_previous",
+
     )
 
     def to_dict(self) -> dict[str, object]:
