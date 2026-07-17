@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from cogn_os.embeddings.similarity import cosine_similarity
 from cogn_os.embeddings.types import EmbeddingProvider
 
-DEFAULT_SIMILARITY_THRESHOLD = 0.75
+DEFAULT_SIMILARITY_THRESHOLD = 0.50
 
 
 @dataclass(frozen=True)
