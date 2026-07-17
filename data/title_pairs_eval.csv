@@ -1,0 +1,21 @@
+title_a,title_b,same_context
+main.py - Visual Studio Code,utils.py - Visual Studio Code,1
+main.py - Visual Studio Code,main.py - Visual Studio Code (line 42),1
+main.py - Visual Studio Code,Stack Overflow - Python TypeError,0
+main.py - Visual Studio Code,Inbox - Gmail,0
+Inbox - Gmail,Compose - New Message - Gmail,1
+Inbox - Gmail,#general - Slack,0
+#general - Slack,#engineering - Slack,1
+#general - Slack,YouTube - Home,0
+YouTube - Home,YouTube - Python Tutorial for Beginners,1
+YouTube - Home,main.py - Visual Studio Code,0
+pytest tests/ -v - Command Prompt,pytest tests/test_train.py -v - Command Prompt,1
+pytest tests/ -v - Command Prompt,npm install - Command Prompt,1
+pytest tests/ -v - Command Prompt,Traceback (most recent call last) - Command Prompt,1
+Report.docx - Word,Budget.xlsx - Excel,0
+Report.docx - Word,Report.docx - Word (autosaved),1
+WhatsApp,Discord,0
+Traceback (most recent call last) - Command Prompt,ValueError: invalid literal - Command Prompt,1
+Traceback (most recent call last) - Command Prompt,main.py - Visual Studio Code,0
+Outlook - Inbox,Teams - General Channel,0
+Outlook - Inbox,Outlook - Sent Items,1
