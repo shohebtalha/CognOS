@@ -35,6 +35,9 @@ from pathlib import Path
 from cogn_os.capture.types import WindowInfo
 from cogn_os.ml.feature_extractor import FeatureExtractor
 
+from cogn_os.embeddings.change_detector import SemanticChangeDetector
+from cogn_os.embeddings.sentence_transformer_provider import SentenceTransformerProvider
+
 APPS = [
     "code.exe", "chrome.exe", "windowsterminal.exe", "slack.exe",
     "whatsapp.root.exe", "winword.exe", "explorer.exe", "outlook.exe",
@@ -62,8 +65,10 @@ def _label_probability(features_dict: dict, app_name: str) -> float:
         p += 0.15
     if app_name in ("code.exe", "windowsterminal.exe"):
         p += 0.10
+    similarity = features_dict.get("title_semantic_similarity_to_previous", 0.5)
+    if similarity < 0.4:
+        p += 0.20
     return min(p, 0.9)
-
 
 def generate_session(rng: random.Random, start: datetime, num_events: int) -> list[WindowInfo]:
     events = []
@@ -78,7 +83,9 @@ def generate_session(rng: random.Random, start: datetime, num_events: int) -> li
 
 def build_dataset(num_sessions: int = 40, events_per_session: int = 60, seed: int = 42) -> list[dict]:
     rng = random.Random(seed)
-    extractor = FeatureExtractor()
+    provider = SentenceTransformerProvider()
+    change_detector = SemanticChangeDetector(provider)
+    extractor = FeatureExtractor(change_detector=change_detector)
     rows: list[dict] = []
 
     for session_idx in range(num_sessions):
