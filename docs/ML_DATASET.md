@@ -49,3 +49,25 @@ foundation once enough real usage exists. Model metrics reported
 before Day 8 (see `models/metrics.json`) should be read as "does the
 model learn the encoded heuristics," not "does it match real user
 judgment" — that claim only becomes valid after retraining on real data.
+
+## Update: Day 11 — Semantic Similarity Feature Added
+
+The dataset was regenerated to include a 9th feature,
+`title_semantic_similarity_to_previous`, computed via a local
+PyTorch-backed sentence-transformer (see `docs/change_detection_results.txt`
+for the standalone evaluation showing this signal outperforms naive
+string matching by +25-35 percentage points on a hand-labeled set).
+
+The synthetic labeling heuristic was also updated to weight low
+semantic similarity as an additional signal of a genuine context
+switch (+0.20 probability when similarity < 0.4), alongside the
+existing heuristics from Day 5.
+
+**Before/after model comparison:** see `docs/feature_impact_day11.txt`
+for the full numbers. Caveat stated there and repeated here: the
+labeling heuristic changed at the same time as the new feature was
+added, so the measured delta reflects both changes together — a
+cleaner ablation (retraining on the OLD dataset with only the new
+column added, features held otherwise constant) was considered but
+not run for this iteration, and is noted as a possible future
+refinement rather than presented as already done.
