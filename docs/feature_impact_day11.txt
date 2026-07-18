@@ -1,0 +1,12 @@
+============================================================
+BEFORE (Day 6, 8 features)  vs  AFTER (Day 11, 9 features)
+============================================================
+Winner model:  random_forest        -> logistic_regression
+Test F1:       0.5116               -> 0.6472  (+0.1356)
+Precision:     0.4451               -> 0.5722  (+0.1271)
+Recall:        0.6016               -> 0.7450  (+0.1434)
+
+CAVEAT: the synthetic dataset's label heuristic also changed
+alongside the new feature (see generate_training_data.py),
+so this delta reflects both changes together, not the new
+feature in perfect isolation. Documented honestly, not hidden.
