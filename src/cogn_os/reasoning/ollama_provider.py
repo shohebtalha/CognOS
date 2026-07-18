@@ -24,8 +24,7 @@ from cogn_os.reasoning.types import ReasoningProvider, ReasoningRequest, Reasoni
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "llama3.2"
-
+DEFAULT_MODEL = "qwen3:8b"
 
 class OllamaReasoningProvider(ReasoningProvider):
     def __init__(self, model: str = DEFAULT_MODEL, host: str = "http://localhost:11434") -> None:

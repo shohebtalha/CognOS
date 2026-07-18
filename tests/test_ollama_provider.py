@@ -38,7 +38,7 @@ def test_get_suggestion_returns_a_result(provider):
     )
     result = provider.get_suggestion(request)
 
-    assert result.model == "llama3.2"
+    assert result.model == "qwen3:8b"
     assert result.suggestion is None or isinstance(result.suggestion, str)
 
 
