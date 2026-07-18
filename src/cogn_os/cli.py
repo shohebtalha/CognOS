@@ -28,6 +28,7 @@ MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "suggestion_classi
 
 
 @app.command()
+@app.command()
 def capture() -> None:
     """Run the ML-gated capture loop in the foreground. Ctrl+C to stop."""
     logging.basicConfig(level=logging.INFO)
@@ -36,18 +37,49 @@ def capture() -> None:
     source = WindowsWindowInfoSource()
     gate = ModelSuggestionGate(model_path=MODEL_PATH)
 
+    reasoning_provider = None
+    try:
+        from cogn_os.reasoning.ollama_provider import OllamaReasoningProvider
+        reasoning_provider = OllamaReasoningProvider()
+        # Quick liveness check so failures surface now, not on first flag.
+        import ollama
+        ollama.Client().list()
+    except Exception:
+        typer.secho(
+            "WARNING: Ollama not reachable (is 'ollama serve' running with "
+            "a model pulled?) — flagged events will be logged but no "
+            "suggestion will be generated.",
+            fg=typer.colors.YELLOW,
+        )
+        reasoning_provider = None
+
     def on_flagged(info) -> None:
         typer.secho(f"[FLAGGED] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
+        if reasoning_provider is None:
+            return
 
-    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged, feature_log_repo=repos.feature_logs,)
+        from cogn_os.reasoning.types import ReasoningRequest
+        request = ReasoningRequest(
+            context_summary=f"Recently active: {info.app_name}",  # Day 13 will build this properly
+            current_app=info.app_name,
+            current_window_title=info.window_title,
+        )
+        result = reasoning_provider.get_suggestion(request)
+        if result.suggestion:
+            typer.secho(f"  -> SUGGESTION: {result.suggestion}", fg=typer.colors.GREEN)
+            repos.suggestions.add(info, result.suggestion)
+        else:
+            typer.echo("  -> (model had nothing useful to say)")
 
-    typer.echo(f"CognOS capture running (ML-gated). Logging to {settings.database_url}")
+    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged,
+                                feature_log_repo=repos.feature_logs)
+
+    typer.echo(f"CognOS capture running (ML-gated, local LLM). Logging to {settings.database_url}")
     try:
         loop.run()
     except KeyboardInterrupt:
         loop.stop()
         typer.echo("\nStopped.")
-
 
 @app.command()
 def version() -> None:
