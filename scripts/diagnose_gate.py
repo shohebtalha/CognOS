@@ -53,7 +53,11 @@ def main() -> None:
                     apps_seen_today=tracker.apps_seen_today,
                 )
                 probability = gate.predict_probability(features)
-                decision = "FLAG" if probability >= 0.5 else "skip"
+                cooldown_elapsed = (
+                    tracker.last_llm_call_at is None
+                    or (info.captured_at - tracker.last_llm_call_at).total_seconds() >= 60
+                )
+                decision = "FLAG" if (probability >= 0.5 and cooldown_elapsed) else "skip"
 
                 print(f"{info.app_name:30s} prob={probability:.3f}  [{decision}]")
                 print(f"    first_time_today={features.is_first_time_app_today}  "
@@ -64,7 +68,7 @@ def main() -> None:
 
                 tracker.record_event(info)
                 tracker.set_previous(info)
-                if probability >= 0.5:
+                if probability >= 0.5 and cooldown_elapsed:
                     tracker.record_llm_call(info.captured_at)
 
                 last_seen = info

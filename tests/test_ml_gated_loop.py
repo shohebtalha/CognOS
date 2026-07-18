@@ -10,7 +10,7 @@ from cogn_os.storage.sqlalchemy_repository import SqlAlchemyFeatureLogRepository
 
 def test_every_change_logged_regardless_of_gate_decision(sqlite_session_factory):
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=False)  # never flags anything
     flagged_events = []
 
@@ -28,7 +28,7 @@ def test_every_change_logged_regardless_of_gate_decision(sqlite_session_factory)
 
 def test_flagged_events_trigger_on_flagged_callback(sqlite_session_factory):
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=True)  # always flags
     flagged_events = []
 
@@ -45,7 +45,7 @@ def test_flagged_events_trigger_on_flagged_callback(sqlite_session_factory):
 
 def test_gate_receives_correctly_populated_features(sqlite_session_factory):
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=True)
 
     w1 = WindowInfo.now("code.exe", "main.py")
@@ -67,7 +67,7 @@ def test_gate_exception_does_not_crash_loop(sqlite_session_factory):
             raise RuntimeError("model exploded")
 
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     flagged_events = []
 
     w1 = WindowInfo.now("code.exe", "main.py")
@@ -83,7 +83,7 @@ def test_gate_exception_does_not_crash_loop(sqlite_session_factory):
 
 def test_excluded_apps_never_reach_the_gate(sqlite_session_factory):
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None, excluded_apps_raw="LockApp.exe")
+    settings = Settings(_env_file=None, excluded_apps_raw="LockApp.exe", min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=True)
 
     w1 = WindowInfo.now("LockApp.exe", "Lock")
@@ -101,7 +101,7 @@ def test_excluded_apps_never_reach_the_gate(sqlite_session_factory):
 def test_feature_log_repo_records_every_event_when_provided(sqlite_session_factory):
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
     feature_log_repo = SqlAlchemyFeatureLogRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=[True, False])
 
     w1 = WindowInfo.now("code.exe", "main.py")
@@ -120,7 +120,7 @@ def test_feature_log_repo_is_optional(sqlite_session_factory):
     # Passing None (or omitting it) must not break the loop — Day 7
     # callers/tests that don't care about logging still work unchanged.
     event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
     gate = FakeSuggestionGate(sequence=True)
 
     w1 = WindowInfo.now("code.exe", "main.py")

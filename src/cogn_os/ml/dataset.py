@@ -54,3 +54,15 @@ def cap_infinite_feature(df: pd.DataFrame, column: str, cap_value: float = 3600.
     df = df.copy()
     df[column] = df[column].replace([float("inf")], cap_value)
     return df
+
+def cap_feature(df: pd.DataFrame, column: str, cap_value: float) -> pd.DataFrame:
+    """Generic version of cap_infinite_feature — clips any feature to a
+    max value, not just infinity. Prevents linear models from
+    extrapolating wildly on feature values far outside the training
+    distribution (e.g. switches_last_5min hitting values never seen
+    during training), which was observed to saturate predict_proba to
+    exactly 1.0 during live testing."""
+    df = df.copy()
+    df[column] = df[column].clip(upper=cap_value)
+    return df
+

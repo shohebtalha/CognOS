@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
+from cogn_os.ml.dataset import cap_feature, cap_infinite_feature
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -26,7 +27,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from cogn_os.ml.dataset import cap_infinite_feature
 from cogn_os.ml.features import SuggestionFeatures
 
 NUMERIC_FEATURES = [
@@ -66,9 +66,9 @@ class TrainTestSplit:
     y_train: pd.Series
     y_test: pd.Series
 
-
 def prepare_data(df: pd.DataFrame, test_size: float = 0.2, seed: int = 42) -> TrainTestSplit:
     df = cap_infinite_feature(df, "seconds_since_last_llm_call")
+    df = cap_feature(df, "switches_last_5min", cap_value=6.0)
     feature_cols = list(SuggestionFeatures.FEATURE_NAMES)
     x = df[feature_cols]
     y = df[LABEL_COLUMN]
