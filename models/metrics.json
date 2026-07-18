@@ -1,5 +1,5 @@
 {
-  "winner": "random_forest",
+  "winner": "logistic_regression",
   "feature_names": [
     "seconds_since_last_llm_call",
     "hour_of_day",
@@ -8,7 +8,8 @@
     "title_length",
     "app_changed",
     "is_first_time_app_today",
-    "switches_last_5min"
+    "switches_last_5min",
+    "title_semantic_similarity_to_previous"
   ],
   "dataset_size": 2400,
   "results": {
@@ -17,24 +18,24 @@
         "model_name": "logistic_regression",
         "metric": "f1",
         "fold_scores": [
-          0.511,
-          0.487,
-          0.5358,
-          0.4595,
-          0.5228
+          0.6496,
+          0.5812,
+          0.5732,
+          0.604,
+          0.5988
         ],
-        "mean": 0.5032,
-        "std": 0.0271
+        "mean": 0.6014,
+        "std": 0.0266
       },
       "test_set": {
         "model_name": "logistic_regression",
-        "precision": 0.3949,
-        "recall": 0.6016,
-        "f1": 0.4768,
-        "true_negatives": 234,
-        "false_positives": 118,
-        "false_negatives": 51,
-        "true_positives": 77
+        "precision": 0.5722,
+        "recall": 0.745,
+        "f1": 0.6472,
+        "true_negatives": 248,
+        "false_positives": 83,
+        "false_negatives": 38,
+        "true_positives": 111
       }
     },
     "random_forest": {
@@ -42,24 +43,24 @@
         "model_name": "random_forest",
         "metric": "f1",
         "fold_scores": [
-          0.5081,
-          0.5076,
-          0.5249,
-          0.4525,
-          0.5338
+          0.6521,
+          0.5653,
+          0.6118,
+          0.6132,
+          0.5949
         ],
-        "mean": 0.5054,
-        "std": 0.0283
+        "mean": 0.6074,
+        "std": 0.0282
       },
       "test_set": {
         "model_name": "random_forest",
-        "precision": 0.4451,
-        "recall": 0.6016,
-        "f1": 0.5116,
-        "true_negatives": 256,
-        "false_positives": 96,
-        "false_negatives": 51,
-        "true_positives": 77
+        "precision": 0.5392,
+        "recall": 0.7383,
+        "f1": 0.6232,
+        "true_negatives": 237,
+        "false_positives": 94,
+        "false_negatives": 39,
+        "true_positives": 110
       }
     }
   }
