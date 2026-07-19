@@ -23,6 +23,9 @@ from cogn_os.service.clock import Clock
 from cogn_os.storage.repository import EventRepository
 from cogn_os.storage.repository import EventRepository, FeatureLogRepository
 
+from cogn_os.context.privacy_filter import is_sensitive
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,11 @@ def build_ml_gated_loop(
     extractor = feature_extractor or FeatureExtractor()
 
     def on_window_changed(info: WindowInfo) -> None:
+        if is_sensitive(info):
+            # Sensitive content never gets logged, feature-extracted,
+            # or reasoned about at all — the strongest point to enforce
+            # this, before any downstream storage or processing.
+            return
         event_repo.add(info)
 
         features = extractor.extract(
