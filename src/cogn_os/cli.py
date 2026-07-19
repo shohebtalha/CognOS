@@ -28,7 +28,6 @@ MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "suggestion_classi
 
 
 @app.command()
-@app.command()
 def capture() -> None:
     """Run the ML-gated capture loop in the foreground. Ctrl+C to stop."""
     logging.basicConfig(level=logging.INFO)
@@ -52,15 +51,26 @@ def capture() -> None:
             fg=typer.colors.YELLOW,
         )
         reasoning_provider = None
-
     def on_flagged(info) -> None:
+        from cogn_os.context.privacy_filter import is_sensitive
+
+        if is_sensitive(info):
+            typer.secho(
+                f"[FLAGGED but SKIPPED - sensitive content] {info.app_name}",
+                fg=typer.colors.RED,
+            )
+            return  # never reaches the LLM, not even a request is built
+
         typer.secho(f"[FLAGGED] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
         if reasoning_provider is None:
             return
 
+        from cogn_os.context.builder import build_context_summary
         from cogn_os.reasoning.types import ReasoningRequest
+
+        context_summary = build_context_summary(history=[], current=info)  # wired properly in Commit #6
         request = ReasoningRequest(
-            context_summary=f"Recently active: {info.app_name}",  # Day 13 will build this properly
+            context_summary=context_summary,
             current_app=info.app_name,
             current_window_title=info.window_title,
         )
@@ -70,16 +80,6 @@ def capture() -> None:
             repos.suggestions.add(info, result.suggestion)
         else:
             typer.echo("  -> (model had nothing useful to say)")
-
-    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged,
-                                feature_log_repo=repos.feature_logs)
-
-    typer.echo(f"CognOS capture running (ML-gated, local LLM). Logging to {settings.database_url}")
-    try:
-        loop.run()
-    except KeyboardInterrupt:
-        loop.stop()
-        typer.echo("\nStopped.")
 
 @app.command()
 def version() -> None:
