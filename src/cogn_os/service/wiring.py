@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class OnFlagged(Protocol):
-    def __call__(self, info: WindowInfo) -> None: ...
-
+    def __call__(self, info: WindowInfo, history: list[WindowInfo]) -> None: ...
 def build_ml_gated_loop(
     settings: Settings,
     source: WindowInfoSource,
@@ -82,7 +81,7 @@ def build_ml_gated_loop(
 
         if flagged:
             tracker.record_llm_call(info.captured_at)
-            on_flagged(info)
+            on_flagged(info, tracker.history)
 
     return CaptureLoop(
         source=source, clock=clock, poll_interval_seconds=settings.poll_interval_seconds,

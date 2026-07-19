@@ -51,15 +51,12 @@ def capture() -> None:
             fg=typer.colors.YELLOW,
         )
         reasoning_provider = None
-    def on_flagged(info) -> None:
+    def on_flagged(info, history) -> None:
         from cogn_os.context.privacy_filter import is_sensitive
 
         if is_sensitive(info):
-            typer.secho(
-                f"[FLAGGED but SKIPPED - sensitive content] {info.app_name}",
-                fg=typer.colors.RED,
-            )
-            return  # never reaches the LLM, not even a request is built
+            typer.secho(f"[FLAGGED but SKIPPED - sensitive content] {info.app_name}", fg=typer.colors.RED)
+            return
 
         typer.secho(f"[FLAGGED] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
         if reasoning_provider is None:
@@ -68,7 +65,7 @@ def capture() -> None:
         from cogn_os.context.builder import build_context_summary
         from cogn_os.reasoning.types import ReasoningRequest
 
-        context_summary = build_context_summary(history=[], current=info)  # wired properly in Commit #6
+        context_summary = build_context_summary(history=history, current=info)
         request = ReasoningRequest(
             context_summary=context_summary,
             current_app=info.app_name,
