@@ -28,6 +28,7 @@ MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "suggestion_classi
 
 
 @app.command()
+@app.command()
 def capture() -> None:
     """Run the ML-gated capture loop in the foreground. Ctrl+C to stop."""
     logging.basicConfig(level=logging.INFO)
@@ -40,7 +41,6 @@ def capture() -> None:
     try:
         from cogn_os.reasoning.ollama_provider import OllamaReasoningProvider
         reasoning_provider = OllamaReasoningProvider()
-        # Quick liveness check so failures surface now, not on first flag.
         import ollama
         ollama.Client().list()
     except Exception:
@@ -51,6 +51,7 @@ def capture() -> None:
             fg=typer.colors.YELLOW,
         )
         reasoning_provider = None
+
     def on_flagged(info, history) -> None:
         from cogn_os.context.privacy_filter import is_sensitive
 
@@ -77,6 +78,16 @@ def capture() -> None:
             repos.suggestions.add(info, result.suggestion)
         else:
             typer.echo("  -> (model had nothing useful to say)")
+
+    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged,
+                                feature_log_repo=repos.feature_logs)
+
+    typer.echo(f"CognOS capture running (ML-gated, local LLM). Logging to {settings.database_url}")
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        loop.stop()
+        typer.echo("\nStopped.")
 
 @app.command()
 def version() -> None:
