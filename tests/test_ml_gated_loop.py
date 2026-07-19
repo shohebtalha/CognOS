@@ -17,8 +17,8 @@ def test_every_change_logged_regardless_of_gate_decision(sqlite_session_factory)
     w1 = WindowInfo.now("a.exe", "t1")
     w2 = WindowInfo.now("b.exe", "t2")
     loop = build_ml_gated_loop(
-        settings, FakeWindowInfoSource([w1, w2]), FakeClock(), event_repo,
-        gate, on_flagged=flagged_events.append,
+    settings, FakeWindowInfoSource([w1, w2]), FakeClock(), event_repo,
+    gate, on_flagged=lambda info, history: flagged_events.append(info),
     )
     loop.run(max_ticks=2)
 
@@ -35,8 +35,7 @@ def test_flagged_events_trigger_on_flagged_callback(sqlite_session_factory):
     w1 = WindowInfo.now("code.exe", "main.py")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
-        gate, on_flagged=flagged_events.append,
-    )
+        gate, on_flagged=lambda info, history: flagged_events.append(info),    )
     loop.run(max_ticks=1)
 
     assert len(flagged_events) == 1
@@ -51,7 +50,7 @@ def test_gate_receives_correctly_populated_features(sqlite_session_factory):
     w1 = WindowInfo.now("code.exe", "main.py")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
-        gate, on_flagged=lambda info: None,
+        gate, on_flagged=lambda info, history: None,
     )
     loop.run(max_ticks=1)
 
@@ -73,8 +72,7 @@ def test_gate_exception_does_not_crash_loop(sqlite_session_factory):
     w1 = WindowInfo.now("code.exe", "main.py")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
-        ExplodingGate(), on_flagged=flagged_events.append,
-    )
+        ExplodingGate(), on_flagged=lambda info, history: flagged_events.append(info),    )
     loop.run(max_ticks=1)  # should not raise
 
     assert event_repo.count() == 1  # event still logged despite gate failure
@@ -89,7 +87,7 @@ def test_excluded_apps_never_reach_the_gate(sqlite_session_factory):
     w1 = WindowInfo.now("LockApp.exe", "Lock")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
-        gate, on_flagged=lambda info: None,
+        gate, on_flagged=lambda info, history: None,
     )
     loop.run(max_ticks=1)
 
@@ -108,7 +106,7 @@ def test_feature_log_repo_records_every_event_when_provided(sqlite_session_facto
     w2 = WindowInfo.now("chrome.exe", "docs")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1, w2]), FakeClock(), event_repo,
-        gate, on_flagged=lambda info: None, feature_log_repo=feature_log_repo,
+        gate, on_flagged=lambda info, history: None, feature_log_repo=feature_log_repo,
     )
     loop.run(max_ticks=2)
 
@@ -126,7 +124,7 @@ def test_feature_log_repo_is_optional(sqlite_session_factory):
     w1 = WindowInfo.now("code.exe", "main.py")
     loop = build_ml_gated_loop(
         settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
-        gate, on_flagged=lambda info: None,  # no feature_log_repo passed
+        gate, on_flagged=lambda info, history: None,  # no feature_log_repo passed
     )
     loop.run(max_ticks=1)  # should not raise
 
