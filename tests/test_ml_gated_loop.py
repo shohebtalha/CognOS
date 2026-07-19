@@ -129,3 +129,17 @@ def test_feature_log_repo_is_optional(sqlite_session_factory):
     loop.run(max_ticks=1)  # should not raise
 
     assert event_repo.count() == 1
+
+def test_sensitive_window_never_logged_to_storage(sqlite_session_factory):
+    event_repo = SqlAlchemyEventRepository(sqlite_session_factory)
+    settings = Settings(_env_file=None, min_seconds_between_llm_calls=0.001)
+    gate = FakeSuggestionGate(sequence=True)
+
+    w1 = WindowInfo.now("chrome.exe", "Bank of Example - Sign In")
+    loop = build_ml_gated_loop(
+        settings, FakeWindowInfoSource([w1]), FakeClock(), event_repo,
+        gate, on_flagged=lambda info, history: None,
+    )
+    loop.run(max_ticks=1)
+
+    assert event_repo.count() == 0  # never even reached storage
