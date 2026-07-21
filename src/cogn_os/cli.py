@@ -1,9 +1,9 @@
 """
-Minimal CLI so the capture loop can actually be run as a program. Now
-uses the ML-gated loop (Day 7) instead of Day 3's storage-only version
-— every window change is logged, and flagged events print to console
-(the real LLM-call/notification wiring lands Day 12+; for now,
-'flagged' just means 'the trained model thinks this was worth attention').
+CognOS CLI. `capture` now runs on PluginOrchestrator (plugin
+architecture) instead of the old build_ml_gated_loop/CaptureLoop path
+— this is the real cutover point. WindowObserver is registered as the
+only plugin today; OCR/clipboard/etc. plugins register here too once
+built, with zero changes to the orchestrator itself.
 """
 
 from __future__ import annotations
@@ -16,11 +16,11 @@ import typer
 from cogn_os.capture.windows_source import WindowsWindowInfoSource
 from cogn_os.config import get_settings
 from cogn_os.ml.model_suggestion_gate import ModelSuggestionGate
+from cogn_os.plugins.orchestrator import PluginOrchestrator
+from cogn_os.plugins.registry import PluginRegistry
+from cogn_os.plugins.window_observer import WindowObserver
 from cogn_os.service.clock import RealClock
-from cogn_os.service.wiring import build_ml_gated_loop
 from cogn_os.storage.factory import get_repositories
-
-import json
 
 app = typer.Typer()
 
@@ -28,13 +28,12 @@ MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "suggestion_classi
 
 
 @app.command()
-@app.command()
 def capture() -> None:
-    """Run the ML-gated capture loop in the foreground. Ctrl+C to stop."""
+    """Run the plugin-based capture/reasoning loop in the foreground.
+    Ctrl+C to stop."""
     logging.basicConfig(level=logging.INFO)
     settings = get_settings()
     repos = get_repositories(settings)
-    source = WindowsWindowInfoSource()
     gate = ModelSuggestionGate(model_path=MODEL_PATH)
 
     reasoning_provider = None
@@ -79,15 +78,26 @@ def capture() -> None:
         else:
             typer.echo("  -> (model had nothing useful to say)")
 
-    loop = build_ml_gated_loop(settings, source, RealClock(), repos.events, gate, on_flagged,
-                                feature_log_repo=repos.feature_logs)
+    clock = RealClock()
+    registry = PluginRegistry(clock)
+    registry.register(WindowObserver(WindowsWindowInfoSource(), poll_interval=settings.poll_interval_seconds))
+    # Future plugins register here — OCR, clipboard, etc. — with zero
+    # changes to PluginOrchestrator itself.
 
-    typer.echo(f"CognOS capture running (ML-gated, local LLM). Logging to {settings.database_url}")
+    orchestrator = PluginOrchestrator(
+        registry, clock, settings, repos.events, gate, on_flagged,
+        feature_log_repo=repos.feature_logs,
+        tick_interval_seconds=1.0,
+    )
+
+    typer.echo(f"CognOS capture running (plugin architecture, local LLM). Logging to {settings.database_url}")
+    typer.echo(f"Registered plugins: {registry.registered_names}")
     try:
-        loop.run()
+        orchestrator.run()
     except KeyboardInterrupt:
-        loop.stop()
+        orchestrator.stop()
         typer.echo("\nStopped.")
+
 
 @app.command()
 def version() -> None:
@@ -98,80 +108,3 @@ def version() -> None:
 
 if __name__ == "__main__":
     app()
-
-@app.command()
-def feedback(count: int = 10) -> None:
-    """Review recent unlabeled model decisions and label them y/n.
-    This is what builds the real (non-synthetic) training set used by
-    'cognos train' — Day 6's model trained purely on synthetic data;
-    this is how it gets grounded in your actual judgment."""
-    settings = get_settings()
-    repos = get_repositories(settings)
-
-    unlabeled = repos.feature_logs.recent_unlabeled(limit=count)
-    if not unlabeled:
-        typer.echo("No unlabeled entries. Run 'cognos capture' for a while first.")
-        return
-
-    typer.echo(f"Labeling {len(unlabeled)} entries. y = worth flagging, n = not, s = skip, q = quit.\n")
-    for entry in unlabeled:
-        typer.echo(f"[{entry.ts}] {entry.app_name} — {entry.window_title}")
-        typer.echo(f"    model predicted: {entry.predicted_probability:.2f} "
-                    f"({'FLAGGED' if entry.model_flagged else 'skipped'})")
-        answer = typer.prompt("    was this worth flagging? [y/n/s/q]", default="s")
-
-        if answer.lower() == "q":
-            break
-        if answer.lower() == "y":
-            repos.feature_logs.set_label(entry.id, 1)
-        elif answer.lower() == "n":
-            repos.feature_logs.set_label(entry.id, 0)
-        # 's' or anything else: skip, leave unlabeled
-
-    typer.echo("\nDone. Run 'cognos train' once you have enough labeled examples.")
-
-
-@app.command()
-def train() -> None:
-    """Retrain the suggestion classifier using real labeled feedback
-    (from 'cognos feedback') blended with the synthetic bootstrap
-    dataset. Only promotes (overwrites) the production model if the
-    new one's test F1 is >= the current production F1 — prints a clear
-    before/after comparison either way."""
-    import joblib
-
-    from cogn_os.ml.retrain import retrain
-
-    settings = get_settings()
-    repos = get_repositories(settings)
-
-    real_examples = repos.feature_logs.labeled_examples()
-    typer.echo(f"Found {len(real_examples)} real labeled examples.")
-
-    project_root = Path(__file__).parent.parent.parent
-    synthetic_csv = project_root / "data" / "synthetic_events.csv"
-    metrics_path = project_root / "models" / "metrics.json"
-    model_path = project_root / "models" / "suggestion_classifier.joblib"
-
-    summary, results, pipeline = retrain(synthetic_csv, real_examples, metrics_path)
-
-    typer.echo(f"\nWinner: {summary.winner}")
-    typer.echo(f"New F1: {summary.new_f1}")
-    typer.echo(f"Previous F1: {summary.previous_f1}")
-
-    if summary.promoted:
-        typer.secho(f"PROMOTED — new model is >= previous. Saving.", fg=typer.colors.GREEN)
-        joblib.dump(pipeline, model_path)
-        metrics_report = {
-            "winner": summary.winner,
-            "feature_names": list(__import__("cogn_os.ml.features", fromlist=["SuggestionFeatures"]).SuggestionFeatures.FEATURE_NAMES),
-            "real_examples_used": summary.real_examples_used,
-            "results": results,
-        }
-        metrics_path.write_text(json.dumps(metrics_report, indent=2))
-    else:
-        typer.secho(
-            f"NOT promoted — new F1 ({summary.new_f1}) is below previous "
-            f"({summary.previous_f1}). Production model unchanged.",
-            fg=typer.colors.RED,
-        )
