@@ -51,7 +51,7 @@ def capture() -> None:
         )
         reasoning_provider = None
 
-    def on_flagged(info, history) -> None:
+    def on_flagged(info, history, ocr_text) -> None:
         from cogn_os.context.privacy_filter import is_sensitive
 
         if is_sensitive(info):
@@ -66,6 +66,9 @@ def capture() -> None:
         from cogn_os.reasoning.types import ReasoningRequest
 
         context_summary = build_context_summary(history=history, current=info)
+        if ocr_text:
+            context_summary += f"\n\nVisible screen text: {ocr_text}"
+
         request = ReasoningRequest(
             context_summary=context_summary,
             current_app=info.app_name,
@@ -81,6 +84,15 @@ def capture() -> None:
     clock = RealClock()
     registry = PluginRegistry(clock)
     registry.register(WindowObserver(WindowsWindowInfoSource(), poll_interval=settings.poll_interval_seconds))
+
+    try:
+        from cogn_os.ocr.tesseract_engine import TesseractOcrEngine
+        from cogn_os.plugins.ocr_observer import OcrObserver
+        from cogn_os.screenshot.pil_screenshotter import PilScreenshotter
+
+        registry.register(OcrObserver(PilScreenshotter(), TesseractOcrEngine()))
+    except Exception:
+        typer.secho("WARNING: OCR plugin failed to initialize — continuing without it.", fg=typer.colors.YELLOW)
     # Future plugins register here — OCR, clipboard, etc. — with zero
     # changes to PluginOrchestrator itself.
 
