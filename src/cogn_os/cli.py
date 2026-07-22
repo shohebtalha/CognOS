@@ -85,21 +85,26 @@ def capture() -> None:
     registry = PluginRegistry(clock)
     registry.register(WindowObserver(WindowsWindowInfoSource(), poll_interval=settings.poll_interval_seconds))
 
+    from cogn_os.screenshot.pil_screenshotter import PilScreenshotter
+
+    ocr_engine = None
+    screenshotter = None
     try:
         from cogn_os.ocr.tesseract_engine import TesseractOcrEngine
         from cogn_os.plugins.ocr_observer import OcrObserver
-        from cogn_os.screenshot.pil_screenshotter import PilScreenshotter
 
-        registry.register(OcrObserver(PilScreenshotter(), TesseractOcrEngine()))
+        screenshotter = PilScreenshotter()
+        ocr_engine = TesseractOcrEngine()
+        registry.register(OcrObserver(screenshotter, ocr_engine))
     except Exception:
         typer.secho("WARNING: OCR plugin failed to initialize — continuing without it.", fg=typer.colors.YELLOW)
-    # Future plugins register here — OCR, clipboard, etc. — with zero
-    # changes to PluginOrchestrator itself.
 
     orchestrator = PluginOrchestrator(
         registry, clock, settings, repos.events, gate, on_flagged,
         feature_log_repo=repos.feature_logs,
         tick_interval_seconds=1.0,
+        screenshotter=screenshotter,
+        ocr_engine=ocr_engine,
     )
 
     typer.echo(f"CognOS capture running (plugin architecture, local LLM). Logging to {settings.database_url}")
