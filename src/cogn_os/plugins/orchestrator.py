@@ -5,18 +5,38 @@ WindowInfoSource. Any number of plugins (window tracking, OCR,
 clipboard, browser, VS Code later) feed into one ContextEvent stream,
 processed uniformly here.
 
-OCR handling (Day 15 decision, documented in ARCHITECTURE_STATE.md):
-OCR text does NOT drive the ML gate's flag/no-flag decision — that
-stays driven by the existing window-change-based SuggestionFeatures,
-unchanged. Instead, the most recently seen OCR text is tracked and
-passed into build_context_summary() so the LLM has real screen content
-to reason about once a window-change event IS flagged by the existing
-gate. This avoids retraining the classifier while still making OCR
-text genuinely useful to suggestion quality.
+OCR handling (Day 15 decision, revised after live testing):
+Originally, OcrObserver's periodic background poll (independent
+~15s timer) populated a "most recent OCR text" that got attached to
+context whenever a window-change event was flagged. Live testing
+showed this was frequently stale or entirely wrong — the OCR poll and
+the flag event are decoupled in time, so by the time a flag fired, the
+screen content OCR last saw was often already different (confirmed:
+a flagged Chrome error produced a suggestion referencing the WRONG
+window's content, because OCR's last poll had captured the terminal,
+not the browser).
+
+FIX: on-demand OCR capture, triggered synchronously at the exact
+moment a window-change event is flagged — not relying on the
+background poll timing at all for this purpose. PluginOrchestrator
+now optionally holds a Screenshotter + OcrEngine directly (same
+interfaces as OcrObserver uses) and, only when a flag actually fires,
+captures a fresh screenshot and runs OCR on it right then. This is
+deliberately synchronous and only runs on the (rare, cooldown-gated)
+flagged path — not on every tick — so it doesn't reintroduce the
+"OCR running too often" cost concern that motivated OcrObserver's
+slow poll interval in the first place.
+
+OcrObserver's periodic background poll is NOT removed — it still
+exists as a registered plugin and its events are still consumed (see
+run_once below), kept for future use (e.g. a dedicated OCR-driven ML
+feature, per the Day 15 note in ARCHITECTURE_STATE.md) even though its
+output is no longer what feeds flag-time context.
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Protocol
 
@@ -26,8 +46,10 @@ from cogn_os.context.privacy_filter import is_sensitive
 from cogn_os.ml.context_tracker import ContextTracker
 from cogn_os.ml.feature_extractor import FeatureExtractor
 from cogn_os.ml.suggestion_gate import SuggestionGate
+from cogn_os.ocr.engine import OcrEngine
 from cogn_os.plugins.registry import PluginRegistry
 from cogn_os.plugins.translators import window_info_from_event
+from cogn_os.screenshot.types import Screenshotter
 from cogn_os.service.clock import Clock
 from cogn_os.storage.repository import EventRepository, FeatureLogRepository
 
@@ -51,6 +73,9 @@ class PluginOrchestrator:
         context_tracker: ContextTracker | None = None,
         feature_extractor: FeatureExtractor | None = None,
         tick_interval_seconds: float = 1.0,
+        screenshotter: Screenshotter | None = None,
+        ocr_engine: OcrEngine | None = None,
+        on_demand_ocr_min_confidence: float = 50.0,
     ) -> None:
         self._registry = registry
         self._clock = clock
@@ -62,29 +87,21 @@ class PluginOrchestrator:
         self._tracker = context_tracker or ContextTracker()
         self._extractor = feature_extractor or FeatureExtractor()
         self._tick_interval_seconds = tick_interval_seconds
+        self._screenshotter = screenshotter
+        self._ocr_engine = ocr_engine
+        self._on_demand_ocr_min_confidence = on_demand_ocr_min_confidence
 
         self._running = False
         self.tick_count = 0
         self._last_ocr_text: str | None = None
 
     def run_once(self) -> list[str]:
-        """Poll all registered plugins once, process any resulting
-        events. Returns the list of event_types processed (mainly for
-        test/debug visibility)."""
         self.tick_count += 1
         events = self._registry.poll_all()
         processed_types: list[str] = []
 
         for event in events:
             if event.event_type == "screen_text_detected":
-                # OCR text doesn't drive the ML gate today (see
-                # ARCHITECTURE_STATE.md Day 15 decision) — it's tracked
-                # here purely to enrich context for the LLM once a
-                # window-change event gets flagged. Kept as "most
-                # recent" only (not accumulated history) since stale
-                # OCR text from several minutes ago is more likely to
-                # mislead than help.
-                self._last_ocr_text = event.payload.get("text")
                 processed_types.append(event.event_type)
                 continue
 
@@ -98,6 +115,22 @@ class PluginOrchestrator:
             processed_types.append(event.event_type)
 
         return processed_types
+
+    def _capture_ocr_on_demand(self) -> str | None:
+        if self._screenshotter is None or self._ocr_engine is None:
+            return None
+        try:
+            screenshot = self._screenshotter.capture()
+            if screenshot is None:
+                return None
+            image_bytes = base64.b64decode(screenshot.image_b64)
+            result = self._ocr_engine.extract_text(image_bytes)
+            if not result.text or result.mean_confidence < self._on_demand_ocr_min_confidence:
+                return None
+            return result.text
+        except Exception:
+            logger.exception("on-demand OCR capture failed")
+            return None
 
     def _process_window_event(self, info: WindowInfo) -> None:
         if is_sensitive(info):
@@ -139,7 +172,8 @@ class PluginOrchestrator:
 
         if flagged:
             self._tracker.record_llm_call(info.captured_at)
-            self._on_flagged(info, self._tracker.history, self._last_ocr_text)
+            ocr_text = self._capture_ocr_on_demand()
+            self._on_flagged(info, self._tracker.history, ocr_text)
 
     def run(self, max_ticks: int | None = None) -> None:
         self._running = True
