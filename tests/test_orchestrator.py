@@ -27,7 +27,7 @@ def test_window_events_are_logged_regardless_of_gate_decision(sqlite_session_fac
 
     orchestrator = PluginOrchestrator(
         registry, FakeClock(), settings, event_repo, gate,
-        on_flagged=lambda info, history: flagged.append(info),
+        on_flagged=lambda info, history, ocr_text: flagged.append(info),
     )
     orchestrator.run(max_ticks=2)
 
@@ -47,7 +47,7 @@ def test_flagged_window_event_triggers_on_flagged(sqlite_session_factory):
 
     orchestrator = PluginOrchestrator(
         registry, FakeClock(), settings, event_repo, gate,
-        on_flagged=lambda info, history: flagged.append(info),
+        on_flagged=lambda info, history, ocr_text: flagged.append(info),
     )
     orchestrator.run(max_ticks=1)
 
@@ -70,7 +70,7 @@ def test_sensitive_window_event_never_stored_or_flagged(sqlite_session_factory):
 
     orchestrator = PluginOrchestrator(
         registry, FakeClock(), settings, event_repo, gate,
-        on_flagged=lambda info, history: flagged.append(info),
+        on_flagged=lambda info, history,ocr_text: flagged.append(info),
     )
     orchestrator.run(max_ticks=1)
 
