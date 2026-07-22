@@ -1,25 +1,23 @@
 """
-PluginOrchestrator is the new top-level loop, replacing CaptureLoop as
-the thing cognos capture actually runs. Where CaptureLoop was hardwired
-to one WindowInfoSource, this is driven by PluginRegistry.poll_all() —
-any number of plugins (window tracking today; OCR, clipboard, browser,
-VS Code later) feed into one ContextEvent stream, which this class
-processes uniformly.
+PluginOrchestrator is the top-level loop that cognos capture runs,
+driven by PluginRegistry.poll_all() instead of a single hardcoded
+WindowInfoSource. Any number of plugins (window tracking, OCR,
+clipboard, browser, VS Code later) feed into one ContextEvent stream,
+processed uniformly here.
 
-Behavior preservation, deliberate: for window_changed events specifically,
-this reproduces exactly what build_ml_gated_loop (service/wiring.py)
-already did — log to storage, extract features, run the ML gate, apply
-the cooldown, filter sensitive content, call the reasoning provider.
-Non-window events currently pass through PluginRegistry but are not
-yet acted upon (no feature extraction path exists for them yet) —
-that's the next real piece of work once OCR/clipboard plugins land,
-not scope for this migration.
+OCR handling (Day 15 decision, documented in ARCHITECTURE_STATE.md):
+OCR text does NOT drive the ML gate's flag/no-flag decision — that
+stays driven by the existing window-change-based SuggestionFeatures,
+unchanged. Instead, the most recently seen OCR text is tracked and
+passed into build_context_summary() so the LLM has real screen content
+to reason about once a window-change event IS flagged by the existing
+gate. This avoids retraining the classifier while still making OCR
+text genuinely useful to suggestion quality.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
 from typing import Protocol
 
 from cogn_os.capture.types import WindowInfo
@@ -37,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class OnFlagged(Protocol):
-    def __call__(self, info: WindowInfo, history: list[WindowInfo]) -> None: ...
+    def __call__(self, info: WindowInfo, history: list[WindowInfo], ocr_text: str | None) -> None: ...
 
 
 class PluginOrchestrator:
@@ -67,6 +65,7 @@ class PluginOrchestrator:
 
         self._running = False
         self.tick_count = 0
+        self._last_ocr_text: str | None = None
 
     def run_once(self) -> list[str]:
         """Poll all registered plugins once, process any resulting
@@ -77,12 +76,20 @@ class PluginOrchestrator:
         processed_types: list[str] = []
 
         for event in events:
+            if event.event_type == "screen_text_detected":
+                # OCR text doesn't drive the ML gate today (see
+                # ARCHITECTURE_STATE.md Day 15 decision) — it's tracked
+                # here purely to enrich context for the LLM once a
+                # window-change event gets flagged. Kept as "most
+                # recent" only (not accumulated history) since stale
+                # OCR text from several minutes ago is more likely to
+                # mislead than help.
+                self._last_ocr_text = event.payload.get("text")
+                processed_types.append(event.event_type)
+                continue
+
             info = window_info_from_event(event)
             if info is None:
-                # Non-window event (OCR, clipboard, etc.) — no
-                # processing path yet. Logged at debug level so it's
-                # visible during development without being noisy in
-                # normal operation.
                 logger.debug("no processing path yet for event_type=%r from source=%r",
                              event.event_type, event.source)
                 continue
@@ -132,7 +139,7 @@ class PluginOrchestrator:
 
         if flagged:
             self._tracker.record_llm_call(info.captured_at)
-            self._on_flagged(info, self._tracker.history)
+            self._on_flagged(info, self._tracker.history, self._last_ocr_text)
 
     def run(self, max_ticks: int | None = None) -> None:
         self._running = True
