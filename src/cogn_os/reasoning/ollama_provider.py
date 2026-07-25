@@ -27,13 +27,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "qwen3:8b"
 
 class OllamaReasoningProvider(ReasoningProvider):
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = "http://localhost:11434") -> None:
+    def __init__(
+        self,
+        model: str = DEFAULT_MODEL,
+        host: str = "http://127.0.0.1:11434",
+        timeout_seconds: float = 30.0,
+    ) -> None:
         try:
             import ollama
         except ImportError as e:
             raise RuntimeError("ollama package not installed. pip install ollama") from e
 
-        self._client = ollama.Client(host=host)
+        self._client = ollama.Client(host=host, timeout=timeout_seconds)
         self._model = model
 
     def get_suggestion(self, request: ReasoningRequest) -> ReasoningResult:

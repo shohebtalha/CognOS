@@ -8,13 +8,23 @@ across the app.
 
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from cogn_os.capture.types import WindowInfo
 from cogn_os.storage.database import session_scope
-from cogn_os.storage.models import EventRecord, SuggestionRecord
-from cogn_os.storage.repository import EventRepository, SuggestionRecordDTO, SuggestionRepository
+from cogn_os.storage.models import AssistantCardRecord, EventRecord, SuggestionRecord
+from cogn_os.storage.repository import (
+    AssistantActionDTO,
+    AssistantCardDTO,
+    AssistantCardRepository,
+    EventRepository,
+    SuggestionRecordDTO,
+    SuggestionRepository,
+)
 
 from cogn_os.screenshot.types import Screenshot
 from cogn_os.storage.models import ScreenshotRecord
@@ -86,6 +96,60 @@ class SqlAlchemySuggestionRepository(SuggestionRepository):
                 )
                 for r in records
             ]
+
+
+class SqlAlchemyAssistantCardRepository(AssistantCardRepository):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add(self, card: AssistantCardDTO) -> AssistantCardDTO:
+        with session_scope(self._session_factory) as session:
+            record = AssistantCardRecord(
+                ts=card.ts,
+                kind=card.kind,
+                severity=card.severity,
+                title=card.title,
+                summary=card.summary,
+                source=card.source,
+                confidence=card.confidence,
+                actions_json=json.dumps([asdict(a) for a in card.actions]),
+                context_json=json.dumps(card.context),
+                status=card.status,
+            )
+            session.add(record)
+            session.flush()
+            return self._to_dto(record)
+
+    def recent(self, limit: int = 50, include_dismissed: bool = False) -> list[AssistantCardDTO]:
+        with session_scope(self._session_factory) as session:
+            stmt = select(AssistantCardRecord).order_by(AssistantCardRecord.id.desc()).limit(limit)
+            if not include_dismissed:
+                stmt = stmt.where(AssistantCardRecord.status != "dismissed")
+            return [self._to_dto(r) for r in session.scalars(stmt)]
+
+    def set_status(self, card_id: int, status: str) -> bool:
+        with session_scope(self._session_factory) as session:
+            record = session.get(AssistantCardRecord, card_id)
+            if record is None:
+                return False
+            record.status = status
+            return True
+
+    def _to_dto(self, r: AssistantCardRecord) -> AssistantCardDTO:
+        actions = [AssistantActionDTO(**item) for item in json.loads(r.actions_json)]
+        return AssistantCardDTO(
+            id=r.id,
+            ts=r.ts,
+            kind=r.kind,
+            severity=r.severity,
+            title=r.title,
+            summary=r.summary,
+            source=r.source,
+            confidence=r.confidence,
+            actions=actions,
+            context=json.loads(r.context_json),
+            status=r.status,
+        )
 
 
 class SqlAlchemyScreenshotRepository(ScreenshotRepository):

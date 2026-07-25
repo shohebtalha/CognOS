@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -42,6 +42,25 @@ class SuggestionRecord(Base):
 
     def __repr__(self) -> str:
         return f"SuggestionRecord(id={self.id}, suggestion={self.suggestion!r})"
+
+
+class AssistantCardRecord(Base):
+    __tablename__ = "assistant_cards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(24), nullable=False, default="info", index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(128), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    actions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    context_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="new", index=True)
+
+    def __repr__(self) -> str:
+        return f"AssistantCardRecord(id={self.id}, kind={self.kind!r}, severity={self.severity!r})"
     
 class ScreenshotRecord(Base):
     __tablename__ = "screenshots"

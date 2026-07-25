@@ -1,0 +1,38 @@
+{
+  "name": "cognos-vscode-connector",
+  "displayName": "CognOS VS Code Connector",
+  "description": "Sends active file and diagnostic context to the local CognOS desktop assistant.",
+  "version": "0.1.0",
+  "publisher": "cognos-local",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished", "onDidChangeActiveTextEditor"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "CognOS",
+      "properties": {
+        "cognos.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send local editor context to CognOS."
+        },
+        "cognos.apiBase": {
+          "type": "string",
+          "default": "http://127.0.0.1:8420",
+          "description": "Local CognOS API base URL."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.5",
+    "@vscode/vsce": "^2.15.0"
+  }
+}

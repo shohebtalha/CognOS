@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "CognOS Browser Connector",
+  "version": "0.1.0",
+  "description": "Sends approved browser context to the local CognOS desktop assistant.",
+  "permissions": ["tabs", "webNavigation", "downloads", "storage"],
+  "host_permissions": ["http://127.0.0.1:8420/*"],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "CognOS Browser Connector",
+    "default_popup": "src/popup.html"
+  }
+}

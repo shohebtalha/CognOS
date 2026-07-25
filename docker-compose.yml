@@ -1,0 +1,14 @@
+services:
+  cognos-api:
+    build: .
+    ports:
+      - "8420:8420"
+    environment:
+      COGNOS_API_HOST: "0.0.0.0"
+      COGNOS_DATABASE_URL: "sqlite:////data/cognos.db"
+      COGNOS_LLM_MODEL: "qwen3:8b"
+    volumes:
+      - cognos-data:/data
+
+volumes:
+  cognos-data:

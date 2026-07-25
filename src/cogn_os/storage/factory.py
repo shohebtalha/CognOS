@@ -6,11 +6,18 @@ from cogn_os.config import Settings
 from cogn_os.storage.database import make_engine, make_session_factory
 from cogn_os.storage.models import Base
 from cogn_os.storage.repository import (
-    EventRepository, FeatureLogRepository, ScreenshotRepository, SuggestionRepository,
+    AssistantCardRepository,
+    EventRepository,
+    FeatureLogRepository,
+    ScreenshotRepository,
+    SuggestionRepository,
 )
 from cogn_os.storage.sqlalchemy_repository import (
-    SqlAlchemyEventRepository, SqlAlchemyFeatureLogRepository,
-    SqlAlchemyScreenshotRepository, SqlAlchemySuggestionRepository,
+    SqlAlchemyAssistantCardRepository,
+    SqlAlchemyEventRepository,
+    SqlAlchemyFeatureLogRepository,
+    SqlAlchemyScreenshotRepository,
+    SqlAlchemySuggestionRepository,
 )
 
 
@@ -18,6 +25,7 @@ from cogn_os.storage.sqlalchemy_repository import (
 class Repositories:
     events: EventRepository
     suggestions: SuggestionRepository
+    assistant_cards: AssistantCardRepository
     screenshots: ScreenshotRepository
     feature_logs: FeatureLogRepository
 
@@ -30,6 +38,7 @@ def get_repositories(settings: Settings, create_tables: bool = True) -> Reposito
     return Repositories(
         events=SqlAlchemyEventRepository(session_factory),
         suggestions=SqlAlchemySuggestionRepository(session_factory),
+        assistant_cards=SqlAlchemyAssistantCardRepository(session_factory),
         screenshots=SqlAlchemyScreenshotRepository(session_factory),
         feature_logs=SqlAlchemyFeatureLogRepository(session_factory),
     )

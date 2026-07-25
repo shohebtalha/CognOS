@@ -1,0 +1,43 @@
+{
+  "name": "cognos-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CognOS desktop shell",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "vite build",
+    "start": "electron .",
+    "package": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "lucide-react": "^0.468.0",
+    "vite": "^5.3.0",
+    "wait-on": "^7.2.0",
+    "typescript": "^5.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "build": {
+    "appId": "dev.cognos.desktop",
+    "productName": "CognOS",
+    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "extraResources": [
+      {"from": "../src", "to": "python/src"},
+      {"from": "../pyproject.toml", "to": "python/pyproject.toml"},
+      {"from": "../models", "to": "python/models"}
+    ],
+    "win": {"target": "nsis"},
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {}
+}

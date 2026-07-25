@@ -29,6 +29,29 @@ class SuggestionRecordDTO:
     suggestion: str
 
 
+@dataclass(frozen=True, slots=True)
+class AssistantActionDTO:
+    id: str
+    label: str
+    kind: str
+    payload: dict
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantCardDTO:
+    id: int
+    ts: datetime
+    kind: str
+    severity: str
+    title: str
+    summary: str
+    source: str
+    confidence: float
+    actions: list[AssistantActionDTO]
+    context: dict
+    status: str
+
+
 class EventRepository(ABC):
     @abstractmethod
     def add(self, info: WindowInfo) -> None:
@@ -54,6 +77,20 @@ class SuggestionRepository(ABC):
     @abstractmethod
     def recent(self, limit: int = 20) -> list[SuggestionRecordDTO]:
         """Return the most recent suggestions, newest first."""
+        raise NotImplementedError
+
+
+class AssistantCardRepository(ABC):
+    @abstractmethod
+    def add(self, card: AssistantCardDTO) -> AssistantCardDTO:
+        raise NotImplementedError
+
+    @abstractmethod
+    def recent(self, limit: int = 50, include_dismissed: bool = False) -> list[AssistantCardDTO]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_status(self, card_id: int, status: str) -> bool:
         raise NotImplementedError
     
 class ScreenshotRepository(ABC):

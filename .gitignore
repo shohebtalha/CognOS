@@ -14,3 +14,4 @@ build/
 *.egg-info/
 .vscode/
 docs/architecture.md
+desktop/node_modules/

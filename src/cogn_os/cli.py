@@ -51,14 +51,14 @@ def capture() -> None:
         )
         reasoning_provider = None
 
-    def on_flagged(info, history, ocr_text) -> None:
+    def on_flagged(info, history, ocr_text, trigger: str = "ml_gate") -> None:
         from cogn_os.context.privacy_filter import is_sensitive
 
         if is_sensitive(info):
             typer.secho(f"[FLAGGED but SKIPPED - sensitive content] {info.app_name}", fg=typer.colors.RED)
             return
 
-        typer.secho(f"[FLAGGED] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
+        typer.secho(f"[FLAGGED:{trigger}] {info.app_name} — {info.window_title}", fg=typer.colors.YELLOW)
         if reasoning_provider is None:
             return
 
@@ -114,6 +114,23 @@ def capture() -> None:
     except KeyboardInterrupt:
         orchestrator.stop()
         typer.echo("\nStopped.")
+
+
+@app.command()
+def api() -> None:
+    """Run the local HTTP API used by the desktop shell."""
+    from cogn_os.api.server import main
+
+    main()
+
+
+@app.command()
+def permissions() -> None:
+    """Show CognOS permission and capability status."""
+    from cogn_os.permissions import permission_inventory
+
+    for item in permission_inventory():
+        typer.echo(f"{item.label}: {item.state.value} - {item.detail}")
 
 
 @app.command()

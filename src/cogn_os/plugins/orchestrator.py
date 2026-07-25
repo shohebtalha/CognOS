@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from inspect import signature
 from typing import Protocol
 
 from cogn_os.capture.types import WindowInfo
@@ -47,6 +48,7 @@ from cogn_os.ml.context_tracker import ContextTracker
 from cogn_os.ml.feature_extractor import FeatureExtractor
 from cogn_os.ml.suggestion_gate import SuggestionGate
 from cogn_os.ocr.engine import OcrEngine
+from cogn_os.ocr.error_detector import contains_error_signal
 from cogn_os.plugins.registry import PluginRegistry
 from cogn_os.plugins.translators import window_info_from_event
 from cogn_os.screenshot.types import Screenshotter
@@ -57,7 +59,9 @@ logger = logging.getLogger(__name__)
 
 
 class OnFlagged(Protocol):
-    def __call__(self, info: WindowInfo, history: list[WindowInfo], ocr_text: str | None) -> None: ...
+    def __call__(
+        self, info: WindowInfo, history: list[WindowInfo], ocr_text: str | None, trigger: str
+    ) -> None: ...
 
 
 class PluginOrchestrator:
@@ -102,6 +106,14 @@ class PluginOrchestrator:
 
         for event in events:
             if event.event_type == "screen_text_detected":
+                text = str(event.payload.get("text", ""))
+                if text and contains_error_signal(text) and self._tracker.previous is not None:
+                    self._emit_flagged(
+                        self._tracker.previous,
+                        self._tracker.history,
+                        text,
+                        "error_detected",
+                    )
                 processed_types.append(event.event_type)
                 continue
 
@@ -173,7 +185,18 @@ class PluginOrchestrator:
         if flagged:
             self._tracker.record_llm_call(info.captured_at)
             ocr_text = self._capture_ocr_on_demand()
-            self._on_flagged(info, self._tracker.history, ocr_text)
+            self._emit_flagged(info, self._tracker.history, ocr_text, "ml_gate")
+
+    def _emit_flagged(
+        self, info: WindowInfo, history: list[WindowInfo], ocr_text: str | None, trigger: str
+    ) -> None:
+        try:
+            if len(signature(self._on_flagged).parameters) >= 4:
+                self._on_flagged(info, history, ocr_text, trigger)
+            else:
+                self._on_flagged(info, history, ocr_text)  # type: ignore[misc]
+        except (TypeError, ValueError):
+            self._on_flagged(info, history, ocr_text, trigger)
 
     def run(self, max_ticks: int | None = None) -> None:
         self._running = True

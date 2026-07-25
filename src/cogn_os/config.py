@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # --- Reasoning / rate limiting ---
     min_seconds_between_llm_calls: float = Field(default=60.0, gt=0)
-    llm_model: str = "claude-sonnet-4-6"
+    llm_model: str = "qwen3:8b"
     llm_max_tokens: int = Field(default=100, gt=0)
 
     # --- Storage ---
@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # --- API ---
     api_host: str = "127.0.0.1"
     api_port: int = 8420
+
+    # --- Desktop monitor ---
+    desktop_monitor_enabled: bool = True
+    clipboard_monitor_enabled: bool = False
+    ocr_monitor_enabled: bool = True
+    ocr_poll_interval_seconds: float = Field(default=5.0, gt=0)
+    monitor_tick_seconds: float = Field(default=1.0, gt=0)
+    native_notifications_enabled: bool = True
+    native_notification_min_severity: str = "warning"
 
     # --- Anthropic credentials ---
     anthropic_api_key: str | None = None
