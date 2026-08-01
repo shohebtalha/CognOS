@@ -51,3 +51,37 @@ def test_runtime_emits_debug_card_for_traceback():
     assert cards[0].kind == "debugging"
     assert cards[0].severity == "critical"
     assert cards[0].actions[0].kind == "ask"
+
+
+def test_runtime_emits_terminal_card_for_failed_command():
+    repo = InMemoryCardRepo()
+    runtime = AssistantRuntime(repo)
+
+    cards = runtime.ingest([
+        ContextEvent.now(
+            source="terminal_transcript",
+            event_type="terminal_output",
+            payload={"text": "npm ERR! missing script: build"},
+            confidence=0.9,
+        )
+    ])
+
+    assert len(cards) == 1
+    assert cards[0].kind == "terminal"
+
+
+def test_runtime_deduplicates_repeated_cards():
+    repo = InMemoryCardRepo()
+    runtime = AssistantRuntime(repo)
+    event = ContextEvent.now(
+        source="terminal_transcript",
+        event_type="terminal_output",
+        payload={"text": "npm ERR! missing script: build"},
+        confidence=0.9,
+    )
+
+    first = runtime.ingest([event])
+    second = runtime.ingest([event])
+
+    assert len(first) == 1
+    assert second == []

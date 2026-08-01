@@ -61,6 +61,21 @@ class AssistantCardRecord(Base):
 
     def __repr__(self) -> str:
         return f"AssistantCardRecord(id={self.id}, kind={self.kind!r}, severity={self.severity!r})"
+
+
+class ContextTimelineRecord(Base):
+    __tablename__ = "context_timeline"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"ContextTimelineRecord(id={self.id}, source={self.source!r}, event_type={self.event_type!r})"
     
 class ScreenshotRecord(Base):
     __tablename__ = "screenshots"

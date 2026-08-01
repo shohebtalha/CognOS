@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Activity, Brain, Check, Layers, Lock, MessageSquare, Radar, ShieldAlert, Sparkles, X } from "lucide-react";
+import { Activity, Brain, Check, Layers, Lock, MessageSquare, Radar, Settings as SettingsIcon, ShieldAlert, Sparkles, X } from "lucide-react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -9,6 +9,19 @@ type AssistantAction = { id: string; label: string; kind: string; payload: Recor
 type AssistantCard = { id: number; ts: string; kind: string; severity: string; title: string; summary: string; source: string; confidence: number; actions: AssistantAction[]; status: string };
 type MonitorStatus = { running: boolean; registered_plugins: string[]; last_error: string | null; events_seen: number; cards_emitted: number; connectors: Record<string, string> };
 type BackendStatus = { running: boolean; pid: number | null; lastError: string | null; mode: string };
+type TimelineItem = { id: number; ts: string; source: string; event_type: string; summary: string; confidence: number | null };
+type UserSettings = {
+  desktop_monitor_enabled: boolean;
+  ocr_monitor_enabled: boolean;
+  clipboard_monitor_enabled: boolean;
+  native_notifications_enabled: boolean;
+  native_notification_min_severity: string;
+  llm_model: string;
+  terminal_monitor_enabled: boolean;
+  terminal_transcript_path: string | null;
+  watched_paths: string[] | null;
+};
+type ModelStatus = { reachable: boolean; configured_model: string; installed_models: string[]; error?: string };
 
 const apiBase = window.cognos?.apiBase ?? "http://127.0.0.1:8420";
 
@@ -19,6 +32,9 @@ function App() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [monitor, setMonitor] = useState<MonitorStatus | null>(null);
   const [backend, setBackend] = useState<BackendStatus | null>(null);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
 
@@ -35,18 +51,26 @@ function App() {
       if (window.cognos?.backendStatus) {
         setBackend(await window.cognos.backendStatus());
       }
-      const [h, s, c, p, m] = await Promise.all([
+      const [h, s, c, p, m, t] = await Promise.all([
         fetch(`${apiBase}/health`).then(r => r.json()),
         fetch(`${apiBase}/suggestions`).then(r => r.json()),
         fetch(`${apiBase}/cards`).then(r => r.json()),
         fetch(`${apiBase}/permissions`).then(r => r.json()),
-        fetch(`${apiBase}/monitor/status`).then(r => r.json())
+        fetch(`${apiBase}/monitor/status`).then(r => r.json()),
+        fetch(`${apiBase}/timeline?limit=30`).then(r => r.json())
       ]);
       setHealth(h.status);
       setSuggestions(s);
       setCards(c);
       setPermissions(p);
       setMonitor(m);
+      setTimeline(t);
+      const [settingsResponse, modelResponse] = await Promise.all([
+        fetch(`${apiBase}/settings`).then(r => r.json()),
+        fetch(`${apiBase}/model/status`).then(r => r.json())
+      ]);
+      setSettings(settingsResponse);
+      setModelStatus(modelResponse);
     } catch {
       setHealth("offline");
     }
@@ -78,8 +102,21 @@ function App() {
   }
 
   async function runAction(action: AssistantAction) {
+    const exec = await fetch(`${apiBase}/actions/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: action.kind, payload: action.payload })
+    }).then(r => r.json());
+    if (exec.requires_confirmation && !window.confirm(exec.message)) return;
+    if (exec.requires_confirmation) {
+      await fetch(`${apiBase}/actions/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: action.kind, payload: action.payload, confirmed: true })
+      });
+    }
     if (action.kind === "ask") {
-      const prompt = String(action.payload.prompt ?? "");
+      const prompt = String(exec.result?.prompt ?? action.payload.prompt ?? "");
       setQuestion(prompt);
       await askWithPrompt(prompt);
     }
@@ -88,6 +125,17 @@ function App() {
   async function dismiss(cardId: number) {
     await fetch(`${apiBase}/cards/${cardId}/dismiss`, { method: "POST" });
     setCards(cards.filter(card => card.id !== cardId));
+  }
+
+  async function updateSettings(patch: Partial<UserSettings>) {
+    const res = await fetch(`${apiBase}/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    const updated = await res.json();
+    setSettings(updated);
+    await refresh();
   }
 
   return (
@@ -99,6 +147,7 @@ function App() {
           <button className="active"><Radar size={18}/> Live</button>
           <button><MessageSquare size={18}/> Ask</button>
           <button><Lock size={18}/> Permissions</button>
+          <button><SettingsIcon size={18}/> Settings</button>
         </nav>
         <div className={`status ${health}`}>{health}</div>
       </aside>
@@ -163,6 +212,30 @@ function App() {
               </div>
             ))}
           </section>
+          <section className="panel settings">
+            <h2><SettingsIcon size={17}/> Settings</h2>
+            {settings && (
+              <>
+                <Toggle label="Desktop monitor" checked={settings.desktop_monitor_enabled} onChange={v => updateSettings({ desktop_monitor_enabled: v })} />
+                <Toggle label="OCR screen understanding" checked={settings.ocr_monitor_enabled} onChange={v => updateSettings({ ocr_monitor_enabled: v })} />
+                <Toggle label="Clipboard monitor" checked={settings.clipboard_monitor_enabled} onChange={v => updateSettings({ clipboard_monitor_enabled: v })} />
+                <Toggle label="Terminal transcript monitor" checked={settings.terminal_monitor_enabled} onChange={v => updateSettings({ terminal_monitor_enabled: v })} />
+                <Toggle label="Windows notifications" checked={settings.native_notifications_enabled} onChange={v => updateSettings({ native_notifications_enabled: v })} />
+                <label className="field">
+                  <span>Model</span>
+                  <input value={settings.llm_model} onChange={e => setSettings({ ...settings, llm_model: e.target.value })} onBlur={e => updateSettings({ llm_model: e.target.value })} />
+                </label>
+                {modelStatus && (
+                  <div className="monitor">
+                    <strong>{modelStatus.reachable ? "Ollama reachable" : "Ollama offline"}</strong>
+                    <p>Configured: {modelStatus.configured_model}</p>
+                    <p>Installed: {modelStatus.installed_models.join(", ") || "none detected"}</p>
+                    {modelStatus.error && <p className="warn">{modelStatus.error}</p>}
+                  </div>
+                )}
+              </>
+            )}
+          </section>
           <section className="panel history">
             <h2>Suggestion History</h2>
             {suggestions.length === 0 && <p className="muted">No saved LLM suggestions yet.</p>}
@@ -174,9 +247,28 @@ function App() {
               </article>
             ))}
           </section>
+          <section className="panel timeline">
+            <h2>Context Timeline</h2>
+            {timeline.length === 0 && <p className="muted">No observed context yet.</p>}
+            {timeline.slice(0, 12).map(item => (
+              <article className="timelineItem" key={item.id}>
+                <div className="meta">{item.source} · {item.event_type} · {new Date(item.ts).toLocaleTimeString()}</div>
+                <p>{item.summary}</p>
+              </article>
+            ))}
+          </section>
         </div>
       </section>
     </main>
+  );
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="toggle">
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+    </label>
   );
 }
 

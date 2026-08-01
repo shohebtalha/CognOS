@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -13,13 +14,26 @@ class UserSettings:
     native_notifications_enabled: bool = True
     native_notification_min_severity: str = "warning"
     llm_model: str = "llama3.2:latest"
+    terminal_monitor_enabled: bool = True
+    terminal_transcript_path: str | None = None
     watched_paths: list[str] | None = None
 
 
 class SettingsStore:
     def __init__(self, path: Path | None = None) -> None:
-        self._path = path or Path.home() / ".cognos" / "settings.json"
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path = path or self._default_path()
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            self._path = Path.cwd() / ".cognos" / "settings.json"
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _default_path(self) -> Path:
+        if os.environ.get("COGNOS_SETTINGS_PATH"):
+            return Path(os.environ["COGNOS_SETTINGS_PATH"])
+        if os.environ.get("LOCALAPPDATA"):
+            return Path(os.environ["LOCALAPPDATA"]) / "CognOS" / "settings.json"
+        return Path.home() / ".cognos" / "settings.json"
 
     def load(self) -> UserSettings:
         if not self._path.exists():

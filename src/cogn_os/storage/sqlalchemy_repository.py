@@ -16,11 +16,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from cogn_os.capture.types import WindowInfo
 from cogn_os.storage.database import session_scope
-from cogn_os.storage.models import AssistantCardRecord, EventRecord, SuggestionRecord
+from cogn_os.storage.models import AssistantCardRecord, ContextTimelineRecord, EventRecord, SuggestionRecord
 from cogn_os.storage.repository import (
     AssistantActionDTO,
     AssistantCardDTO,
     AssistantCardRepository,
+    ContextTimelineDTO,
+    ContextTimelineRepository,
     EventRepository,
     SuggestionRecordDTO,
     SuggestionRepository,
@@ -149,6 +151,51 @@ class SqlAlchemyAssistantCardRepository(AssistantCardRepository):
             actions=actions,
             context=json.loads(r.context_json),
             status=r.status,
+        )
+
+
+class SqlAlchemyContextTimelineRepository(ContextTimelineRepository):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add_event(
+        self,
+        source: str,
+        event_type: str,
+        summary: str,
+        payload: dict,
+        ts,
+        confidence: float | None,
+    ) -> ContextTimelineDTO:
+        with session_scope(self._session_factory) as session:
+            record = ContextTimelineRecord(
+                ts=ts,
+                source=source,
+                event_type=event_type,
+                summary=summary,
+                payload_json=json.dumps(payload),
+                confidence=confidence,
+            )
+            session.add(record)
+            session.flush()
+            return self._to_dto(record)
+
+    def recent(self, limit: int = 100) -> list[ContextTimelineDTO]:
+        with session_scope(self._session_factory) as session:
+            records = list(session.scalars(
+                select(ContextTimelineRecord).order_by(ContextTimelineRecord.id.desc()).limit(limit)
+            ))
+            return [self._to_dto(r) for r in records]
+
+    def _to_dto(self, r: ContextTimelineRecord) -> ContextTimelineDTO:
+        return ContextTimelineDTO(
+            id=r.id,
+            ts=r.ts,
+            source=r.source,
+            event_type=r.event_type,
+            summary=r.summary,
+            payload=json.loads(r.payload_json),
+            confidence=r.confidence,
         )
 
 

@@ -44,9 +44,19 @@ textarea { width: 100%; min-height: 130px; resize: vertical; border: 1px solid #
 .monitor .warn { color: #ffb4a8; }
 .permissions { grid-column: 2; }
 .history { grid-column: 2; }
+.settings { grid-column: 2; }
+.timeline { grid-column: 1 / span 2; }
+.timelineItem { border-top: 1px solid #2b313b; padding: 10px 0; }
+.timelineItem:first-of-type { border-top: 0; }
+.timelineItem p { color: #c6cfdd; line-height: 1.35; font-size: 13px; }
 .permission { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid #2b313b; }
 .permission:first-of-type { border-top: 0; }
 .permission p { color: #9aa4b5; margin-top: 3px; font-size: 13px; line-height: 1.35; }
+.toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #2b313b; padding: 11px 0; color: #dce3ef; }
+.toggle:first-of-type { border-top: 0; }
+.toggle input { width: 18px; height: 18px; accent-color: #4d7cfe; }
+.field { display: grid; gap: 7px; margin-top: 12px; color: #dce3ef; }
+.field input { border: 1px solid #303848; border-radius: 7px; background: #10141b; color: #edf0f5; padding: 10px 11px; font: inherit; }
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
   aside { flex-direction: row; align-items: center; }

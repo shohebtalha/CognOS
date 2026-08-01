@@ -33,6 +33,16 @@ class AssistantCardOut(BaseModel):
     status: str
 
 
+class ContextTimelineOut(BaseModel):
+    id: int
+    ts: datetime
+    source: str
+    event_type: str
+    summary: str
+    payload: dict
+    confidence: float | None = None
+
+
 class ContextEventIn(BaseModel):
     source: str
     event_type: str
@@ -49,6 +59,19 @@ class AskResponse(BaseModel):
     sources: list[dict] = []
 
 
+class ExecuteActionRequest(BaseModel):
+    kind: str
+    payload: dict = {}
+    confirmed: bool = False
+
+
+class ExecuteActionResponse(BaseModel):
+    ok: bool
+    message: str
+    requires_confirmation: bool = False
+    result: dict = {}
+
+
 class UserSettingsOut(BaseModel):
     desktop_monitor_enabled: bool
     ocr_monitor_enabled: bool
@@ -56,6 +79,8 @@ class UserSettingsOut(BaseModel):
     native_notifications_enabled: bool
     native_notification_min_severity: str
     llm_model: str
+    terminal_monitor_enabled: bool
+    terminal_transcript_path: str | None = None
     watched_paths: list[str] | None = None
 
 
@@ -66,4 +91,6 @@ class UserSettingsPatch(BaseModel):
     native_notifications_enabled: bool | None = None
     native_notification_min_severity: str | None = None
     llm_model: str | None = None
+    terminal_monitor_enabled: bool | None = None
+    terminal_transcript_path: str | None = None
     watched_paths: list[str] | None = None

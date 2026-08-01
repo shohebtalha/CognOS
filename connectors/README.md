@@ -35,6 +35,28 @@ It sends:
 - active file metadata
 - warnings and errors from VS Code diagnostics
 
+## PowerShell Terminal Connector
+
+Installs a small profile hook that appends terminal sessions to:
+
+```text
+%USERPROFILE%\.cognos\terminal\transcript.log
+```
+
+CognOS watches that transcript locally and generates cards for failures, stack traces, and suspicious terminal output.
+
+Install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File connectors\powershell-terminal\install.ps1
+```
+
+Uninstall:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File connectors\powershell-terminal\uninstall.ps1
+```
+
 ## Privacy
 
 All connector traffic stays local. Disable connectors from their own settings or browser popup when you do not want that source observed.

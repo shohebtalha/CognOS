@@ -15,3 +15,5 @@ build/
 .vscode/
 docs/architecture.md
 desktop/node_modules/
+.cognos/
+.tmp/

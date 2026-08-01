@@ -12,6 +12,12 @@ class OpportunityDetector:
     """Converts raw events into product-level assistant opportunities."""
 
     _SECRET = re.compile(r"(api[_-]?key|secret|token|password)\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{12,}", re.I)
+    _TERMINAL_FAILURE = re.compile(
+        r"(command failed|exit_code=[1-9]|fatal:|error:|npm ERR!|docker: error|kubectl .*error|"
+        r"permission denied|access is denied|cannot find|not recognized as)",
+        re.I,
+    )
+    _UNSAFE_COMMAND = re.compile(r"\b(rm\s+-rf\s+/|format\s+[a-z]:|del\s+/s\s+/q\s+[a-z]:\\|git\s+reset\s+--hard)\b", re.I)
 
     def __init__(self, rule_engine: RuleEngine | None = None) -> None:
         self._rules = rule_engine or RuleEngine()
@@ -117,6 +123,33 @@ class OpportunityDetector:
                     confidence=0.9,
                     actions=(AssistantAction("download_safety", "Check safety", "ask", {"prompt": f"Assess this download metadata:\n{event.payload}"}),),
                     context={"download": event.payload},
+                ))
+
+        if event.event_type == "terminal_output":
+            if self._UNSAFE_COMMAND.search(text):
+                cards.append(AssistantCard(
+                    kind="safety",
+                    severity=CardSeverity.CRITICAL,
+                    title="Dangerous command detected",
+                    summary="Terminal output contains a command pattern that can delete or overwrite important work.",
+                    source=event.source,
+                    confidence=0.92,
+                    actions=(AssistantAction("safe_terminal_steps", "Safer option", "ask", {"prompt": f"Suggest a safer alternative for this terminal activity:\n{text[:3000]}"}),),
+                    context={"event_type": event.event_type, "text": text[:3000]},
+                ))
+            elif self._TERMINAL_FAILURE.search(text):
+                cards.append(AssistantCard(
+                    kind="terminal",
+                    severity=CardSeverity.WARNING,
+                    title="Terminal failure detected",
+                    summary="A command appears to have failed. CognOS can explain the error and suggest the next step.",
+                    source=event.source,
+                    confidence=0.88,
+                    actions=(
+                        AssistantAction("explain_terminal", "Explain", "ask", {"prompt": f"Explain this terminal failure:\n{text[:3000]}"}),
+                        AssistantAction("fix_terminal", "Fix", "ask", {"prompt": f"Give the likely fix for this terminal output:\n{text[:3000]}"}),
+                    ),
+                    context={"event_type": event.event_type, "text": text[:3000]},
                 ))
 
         return cards

@@ -11,11 +11,15 @@ from cogn_os.api.schemas import (
     AskRequest,
     AskResponse,
     AssistantCardOut,
+    ContextTimelineOut,
     ContextEventIn,
+    ExecuteActionRequest,
+    ExecuteActionResponse,
     SuggestionOut,
     UserSettingsOut,
     UserSettingsPatch,
 )
+from cogn_os.actions import ActionExecutor
 from cogn_os.assistant.desktop_monitor import DesktopMonitor
 from cogn_os.assistant.runtime import AssistantRuntime
 from cogn_os.config import Settings, get_settings
@@ -33,9 +37,10 @@ def create_app(settings: Settings | None = None, bus: EventBus | None = None) ->
     bus = bus or EventBus()
     repos = get_repositories(settings)
     rules = RuleEngine()
+    actions = ActionExecutor()
     settings_store = SettingsStore()
-    runtime = AssistantRuntime(repos.assistant_cards, bus)
-    monitor = DesktopMonitor(settings, runtime, repos.events, bus)
+    runtime = AssistantRuntime(repos.assistant_cards, repos.timeline, bus)
+    monitor = DesktopMonitor(settings, runtime, repos.events, bus, settings_store)
 
     app = FastAPI(title="CognOS Local API", version="0.1.0")
     app.state.bus = bus
@@ -51,6 +56,34 @@ def create_app(settings: Settings | None = None, bus: EventBus | None = None) ->
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "llm_model": settings.llm_model}
+
+    @app.get("/health/deep")
+    def deep_health() -> dict:
+        checks = {"api": True}
+        try:
+            checks["database"] = repos.events.count() >= 0
+        except Exception as exc:
+            checks["database"] = False
+            checks["database_error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            loaded = settings_store.load()
+            checks["settings"] = bool(loaded.llm_model)
+        except Exception as exc:
+            checks["settings"] = False
+            checks["settings_error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            import ollama
+
+            ollama.Client(host="http://127.0.0.1:11434", timeout=3.0).list()
+            checks["ollama"] = True
+        except Exception as exc:
+            checks["ollama"] = False
+            checks["ollama_error"] = f"{type(exc).__name__}: {exc}"
+        checks["monitor_running"] = monitor.status.running
+        checks["events_seen"] = monitor.status.events_seen
+        checks["cards_emitted"] = monitor.status.cards_emitted
+        status = "ok" if checks.get("database") and checks.get("settings") else "degraded"
+        return {"status": status, "checks": checks}
 
     @app.on_event("startup")
     async def start_monitor() -> None:
@@ -73,8 +106,15 @@ def create_app(settings: Settings | None = None, bus: EventBus | None = None) ->
         return settings_store.load()
 
     @app.patch("/settings", response_model=UserSettingsOut)
-    def update_user_settings(payload: UserSettingsPatch):
-        return settings_store.update(payload.model_dump(exclude_none=True))
+    async def update_user_settings(payload: UserSettingsPatch):
+        updated = settings_store.update(payload.model_dump(exclude_none=True))
+        await monitor.restart()
+        return updated
+
+    @app.post("/monitor/restart")
+    async def restart_monitor() -> dict:
+        await monitor.restart()
+        return {"ok": True, "status": asdict(monitor.status)}
 
     @app.get("/model/status")
     def model_status() -> dict:
@@ -103,6 +143,10 @@ def create_app(settings: Settings | None = None, bus: EventBus | None = None) ->
     @app.get("/cards", response_model=list[AssistantCardOut])
     def cards(limit: int = 50, include_dismissed: bool = False):
         return repos.assistant_cards.recent(limit=limit, include_dismissed=include_dismissed)
+
+    @app.get("/timeline", response_model=list[ContextTimelineOut])
+    def timeline(limit: int = 100):
+        return repos.timeline.recent(limit=limit)
 
     @app.post("/cards/{card_id}/dismiss")
     def dismiss_card(card_id: int) -> dict:
@@ -165,6 +209,16 @@ def create_app(settings: Settings | None = None, bus: EventBus | None = None) ->
                 f"Ollama error: {type(exc).__name__}: {exc}"
             )
         return AskResponse(answer=answer, sources=[asdict(f) for f in findings])
+
+    @app.post("/actions/execute", response_model=ExecuteActionResponse)
+    def execute_action(payload: ExecuteActionRequest):
+        result = actions.execute(payload.kind, payload.payload, payload.confirmed)
+        return ExecuteActionResponse(
+            ok=result.ok,
+            message=result.message,
+            requires_confirmation=result.requires_confirmation,
+            result=result.result or {},
+        )
 
     @app.get("/events")
     async def events():

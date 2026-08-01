@@ -52,6 +52,17 @@ class AssistantCardDTO:
     status: str
 
 
+@dataclass(frozen=True, slots=True)
+class ContextTimelineDTO:
+    id: int
+    ts: datetime
+    source: str
+    event_type: str
+    summary: str
+    payload: dict
+    confidence: float | None
+
+
 class EventRepository(ABC):
     @abstractmethod
     def add(self, info: WindowInfo) -> None:
@@ -91,6 +102,24 @@ class AssistantCardRepository(ABC):
 
     @abstractmethod
     def set_status(self, card_id: int, status: str) -> bool:
+        raise NotImplementedError
+
+
+class ContextTimelineRepository(ABC):
+    @abstractmethod
+    def add_event(
+        self,
+        source: str,
+        event_type: str,
+        summary: str,
+        payload: dict,
+        ts: datetime,
+        confidence: float | None,
+    ) -> ContextTimelineDTO:
+        raise NotImplementedError
+
+    @abstractmethod
+    def recent(self, limit: int = 100) -> list[ContextTimelineDTO]:
         raise NotImplementedError
     
 class ScreenshotRepository(ABC):

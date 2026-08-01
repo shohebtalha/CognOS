@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cogn_os.config import Settings
-from cogn_os.storage.database import make_engine, make_session_factory
+from cogn_os.storage.database import ensure_sqlite_schema, make_engine, make_session_factory
 from cogn_os.storage.models import Base
 from cogn_os.storage.repository import (
     AssistantCardRepository,
+    ContextTimelineRepository,
     EventRepository,
     FeatureLogRepository,
     ScreenshotRepository,
@@ -14,6 +15,7 @@ from cogn_os.storage.repository import (
 )
 from cogn_os.storage.sqlalchemy_repository import (
     SqlAlchemyAssistantCardRepository,
+    SqlAlchemyContextTimelineRepository,
     SqlAlchemyEventRepository,
     SqlAlchemyFeatureLogRepository,
     SqlAlchemyScreenshotRepository,
@@ -26,6 +28,7 @@ class Repositories:
     events: EventRepository
     suggestions: SuggestionRepository
     assistant_cards: AssistantCardRepository
+    timeline: ContextTimelineRepository
     screenshots: ScreenshotRepository
     feature_logs: FeatureLogRepository
 
@@ -34,11 +37,13 @@ def get_repositories(settings: Settings, create_tables: bool = True) -> Reposito
     engine = make_engine(settings)
     if create_tables:
         Base.metadata.create_all(engine)
+        ensure_sqlite_schema(engine)
     session_factory = make_session_factory(engine)
     return Repositories(
         events=SqlAlchemyEventRepository(session_factory),
         suggestions=SqlAlchemySuggestionRepository(session_factory),
         assistant_cards=SqlAlchemyAssistantCardRepository(session_factory),
+        timeline=SqlAlchemyContextTimelineRepository(session_factory),
         screenshots=SqlAlchemyScreenshotRepository(session_factory),
         feature_logs=SqlAlchemyFeatureLogRepository(session_factory),
     )
